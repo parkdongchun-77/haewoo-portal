@@ -1,0 +1,132 @@
+<!doctype html>
+<!-- 직원 QR 출퇴근 페이지 (모바일·GPS 25m·Supabase 저장) -->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Haewoo Vina — Chấm công / 출퇴근</title>
+<style>
+:root{--navy:#14233f;--gold:#c2a36b;--in:#1f8a54;--out:#c0492f;--bg:#eef2f7;--line:#dfe4ec}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:'Noto Sans KR',system-ui,sans-serif;background:linear-gradient(180deg,#16294a,#0e1b30);color:#1b2435;display:flex;justify-content:center}
+.app{width:100%;max-width:440px;min-height:100%;background:var(--bg);display:flex;flex-direction:column}
+.top{background:var(--navy);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-family:'Noto Serif KR',serif;font-weight:700}.brand b{color:var(--gold)}
+.lang{font-size:12px}.lang span{cursor:pointer;opacity:.6;padding:0 4px}.lang span.on{opacity:1;font-weight:700;color:var(--gold)}
+.card{margin:18px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 12px 30px rgba(20,35,63,.12)}
+.who .nm{font-size:24px;font-weight:800;color:var(--navy)}.who .meta{color:#6d7384;font-size:14px;margin-top:2px}
+.clock{font-variant-numeric:tabular-nums;font-size:15px;color:#48506a;margin-top:6px}
+.phone{margin-top:14px;display:none}.phone input{width:100%;padding:13px;border:1px solid var(--line);border-radius:12px;font-size:16px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 18px 0}
+.b{border:0;border-radius:18px;padding:26px 0;font-size:21px;font-weight:800;color:#fff;cursor:pointer;box-shadow:0 12px 26px rgba(0,0,0,.18);transition:transform .1s}
+.b:active{transform:scale(.97)}.b.in{background:var(--in)}.b.out{background:var(--out)}.b:disabled{opacity:.5}
+.b small{display:block;font-size:12px;font-weight:600;opacity:.9;margin-top:4px}
+.status{margin:16px 18px;padding:16px;border-radius:14px;font-size:15px;display:none}
+.status.ok{background:#e7f6ee;border:1px solid #b6e2c8;color:#1f8a54}
+.status.err{background:#fdece7;border:1px solid #f3c5b6;color:#c0492f}
+.status.info{background:#eef2fb;border:1px solid #cfd9ee;color:#33415a}
+.hint{margin:auto 18px 22px;color:#8a91a2;font-size:12px;text-align:center;line-height:1.6}
+.foot{margin-top:auto}
+.spin{display:inline-block;width:16px;height:16px;border:3px solid #ffffff66;border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">HAEWOO <b>VINA</b></div>
+    <div class="lang"><span data-l="vi" class="on">VI</span><span data-l="ko">KO</span></div>
+  </div>
+
+  <div class="card who" id="whoCard">
+    <div class="nm" id="nm">…</div>
+    <div class="meta" id="meta"></div>
+    <div class="clock" id="clock"></div>
+    <div class="phone" id="phoneBox"><input id="phone" inputmode="tel" placeholder="Số điện thoại / 전화번호"></div>
+  </div>
+
+  <div class="btns">
+    <button class="b in" id="btnIn" disabled>출근<small>VÀO CA · CHECK-IN</small></button>
+    <button class="b out" id="btnOut" disabled>퇴근<small>TAN CA · CHECK-OUT</small></button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="hint foot" id="hint">
+    Vui lòng bật GPS và đứng trong khu vực kho V2 (bán kính 25m).<br>
+    GPS를 켜고 V2 창고 반경 25m 안에서 눌러 주세요.
+  </div>
+</div>
+
+<script src="haewoo-sb.js"></script>
+<script>
+// 직원 QR 출퇴근 로직 (위치 측정 → 서버 RPC 저장)
+const T = new URLSearchParams(location.search).get('t');
+let LANG = 'vi', EMP = null, busy = false;
+const $ = id => document.getElementById(id);
+const L = {
+  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m' },
+  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m' }
+};
+const ROLE = { Leader:'조장 / Leader', System:'시스템 / System', Forklift:'지게차 / Forklift', InOut:'입출고 / In-Out', Manager:'매니저', HR:'HR' };
+
+document.querySelectorAll('.lang span').forEach(s=>s.onclick=()=>{
+  LANG=s.dataset.l; document.querySelectorAll('.lang span').forEach(x=>x.classList.toggle('on',x===s)); render();
+});
+function clock(){ const d=new Date(); $('clock').textContent=d.toLocaleString(LANG==='vi'?'vi-VN':'ko-KR'); }
+setInterval(clock,1000); clock();
+
+function render(){
+  $('btnIn').firstChild.textContent = L[LANG].in;
+  $('btnOut').firstChild.textContent = L[LANG].out;
+  if(EMP){
+    $('nm').textContent = EMP.full_name;
+    $('meta').textContent = `${L[LANG].team} ${EMP.team} · ${ROLE[EMP.role]||EMP.role} · #${EMP.emp_no}`;
+    if(EMP.last_kind){
+      const t=new Date(EMP.last_ts).toLocaleString(LANG==='vi'?'vi-VN':'ko-KR');
+      showStatus('info', `${L[LANG].last}: ${EMP.last_kind==='in'?L[LANG].in:L[LANG].out} · ${t}`);
+    }
+  }
+}
+function showStatus(cls,msg){ const s=$('status'); s.className='status '+cls; s.innerHTML=msg; s.style.display='block'; }
+
+async function load(){
+  if(!T){ $('nm').textContent='—'; showStatus('err', L[LANG].noqr); return; }
+  try{
+    const r = await rpc('haewoo_get_employee',{p_token:T});
+    if(!r.ok){ $('nm').textContent='—'; showStatus('err', r.message||L[LANG].noqr); return; }
+    EMP=r; $('btnIn').disabled=false; $('btnOut').disabled=false;
+    if(!EMP.phone) $('phoneBox').style.display='block';
+    render();
+  }catch(e){ showStatus('err','연결 오류: '+e.message); }
+}
+
+function getPos(){
+  return new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(
+    p=>res(p), e=>rej(e), {enableHighAccuracy:true, timeout:15000, maximumAge:0}));
+}
+async function punch(kind){
+  if(busy||!EMP) return; busy=true;
+  const btn = kind==='in'?$('btnIn'):$('btnOut');
+  const label = btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
+  showStatus('info', L[LANG].wait);
+  try{
+    const p = await getPos();
+    const phone = $('phone') ? $('phone').value.trim() : '';
+    const r = await rpc('haewoo_checkin',{p_token:T,p_kind:kind,p_lat:p.coords.latitude,p_lng:p.coords.longitude,p_phone:phone||null});
+    if(r.ok){
+      $('phoneBox').style.display='none';
+      showStatus('ok', `✓ ${kind==='in'?L[LANG].okin:L[LANG].okout} · ${L[LANG].dist} ${r.distance_m}${L[LANG].m}<br>${new Date(r.ts).toLocaleString(LANG==='vi'?'vi-VN':'ko-KR')}`);
+    } else {
+      showStatus('err', r.message || 'Lỗi');
+    }
+  }catch(e){
+    showStatus('err', (e && e.code) ? L[LANG].need : ('오류: '+(e.message||e)));
+  } finally { btn.innerHTML=label; busy=false; }
+}
+$('btnIn').onclick=()=>punch('in');
+$('btnOut').onclick=()=>punch('out');
+load();
+</script>
+</body>
+</html>

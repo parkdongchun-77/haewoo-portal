@@ -1,0 +1,251 @@
+<!doctype html>
+<!-- 관리자·중간관리자용 근태 대시보드 (3교대 현황·이력·QR발급·기준위치) -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>근태 관리 — Haewoo Vina</title>
+<style>
+:root{--navy:#14233f;--navy2:#1f3358;--gold:#c2a36b;--bg:#f5f7fa;--ink:#1b2435;--muted:#6d7384;--line:#e4e8ee;--in:#1f8a54;--out:#c0492f}
+*{box-sizing:border-box}body{margin:0;font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+a{color:inherit}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 20%,var(--navy2),var(--navy) 70%)}
+.lbox{background:#fff;border-radius:18px;padding:32px;width:320px;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.lbox h1{font-family:'Noto Serif KR',serif;font-size:20px;margin:0 0 4px;color:var(--navy)}.lbox p{margin:0 0 18px;color:var(--muted);font-size:13px}
+.lbox input{width:100%;padding:13px;border:1px solid var(--line);border-radius:11px;font-size:15px;margin-bottom:12px}
+.lbox button{width:100%;padding:13px;border:0;border-radius:11px;background:var(--navy);color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+.lerr{color:var(--out);font-size:13px;margin-bottom:10px;display:none}
+.hdr{background:var(--navy);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px}
+.hdr .t{font-family:'Noto Serif KR',serif;font-weight:700}.hdr .t b{color:var(--gold)}
+.hdr .sp{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:13px}
+.hdr a.home{color:rgba(255,255,255,.8);text-decoration:none}.hdr button.lo{background:rgba(255,255,255,.14);border:0;color:#fff;padding:7px 12px;border-radius:9px;cursor:pointer}
+.tabs{display:flex;gap:4px;background:#fff;border-bottom:1px solid var(--line);padding:0 12px;overflow-x:auto}
+.tab{padding:14px 16px;font-size:14px;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
+.tab.on{color:var(--navy);font-weight:700;border-bottom-color:var(--gold)}
+.wrap{max-width:1080px;margin:0 auto;padding:20px}
+.bar{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.bar input[type=date]{padding:8px 10px;border:1px solid var(--line);border-radius:9px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.kpi .n{font-size:26px;font-weight:800;color:var(--navy)}.kpi .l{font-size:12px;color:var(--muted)}
+.grp{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden}
+.grp h3{margin:0;padding:12px 16px;background:#f0f3f8;font-size:14px;color:var(--navy);display:flex;justify-content:space-between}
+.grp h3 .cnt{color:var(--muted);font-weight:400}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 12px;text-align:left;border-top:1px solid var(--line)}
+th{background:#fafbfd;color:var(--muted);font-weight:600;font-size:12px}
+.pill{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700}
+.pill.in{background:#e7f6ee;color:var(--in)}.pill.out{background:#fdece7;color:var(--out)}.pill.no{background:#eef0f4;color:#98a0b0}
+.role{color:var(--muted);font-size:12px}
+.shift{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.scard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+.scard .c{font-size:13px;color:var(--gold);font-weight:700}.scard .h{font-size:20px;font-weight:800;color:var(--navy);margin:4px 0}
+.qrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.qc{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
+.qc .qimg{display:flex;justify-content:center;margin:6px 0}
+.qc .nm{font-weight:700;color:var(--navy);font-size:14px}.qc .mt{font-size:12px;color:var(--muted);margin-bottom:6px}
+.qc button{font-size:12px;border:1px solid var(--line);background:#f7f9fc;border-radius:8px;padding:6px 10px;cursor:pointer;margin-top:6px}
+.note{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;font-size:14px;line-height:1.9}
+.note input{padding:9px;border:1px solid var(--line);border-radius:9px;width:130px}
+.note button{padding:9px 14px;border:0;border-radius:9px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer}
+.muted{color:var(--muted)}
+@media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.shift{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+  <div class="lbox">
+    <h1>근태 관리 시스템</h1>
+    <p>Hệ thống chấm công · 관리자 로그인</p>
+    <div class="lerr" id="lerr"></div>
+    <input id="u" placeholder="아이디" autocomplete="username">
+    <input id="p" type="password" placeholder="비밀번호" autocomplete="current-password">
+    <button id="loginBtn">로그인</button>
+    <p style="margin-top:14px"><a href="index.html" style="color:var(--muted);font-size:12px">← 회사 홈페이지</a></p>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="hdr">
+    <div class="t">HAEWOO <b>VINA</b> · 근태</div>
+    <div class="sp"><span class="muted" id="whoami"></span><a class="home" href="portal.html">시스템</a><button class="lo" id="logout">로그아웃</button></div>
+  </div>
+  <div class="tabs">
+    <div class="tab on" data-v="today">오늘 현황</div>
+    <div class="tab" data-v="log">출퇴근 이력</div>
+    <div class="tab" data-v="shift">3교대 / 조 편성</div>
+    <div class="tab" data-v="qr">QR 발급</div>
+    <div class="tab" data-v="loc">기준 위치</div>
+    <div class="tab" data-v="bot">해우봇 문의</div>
+    <div class="tab" data-v="quote">견적 문의</div>
+  </div>
+  <div class="wrap" id="view"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="haewoo-sb.js"></script>
+<script>
+// 관리자 대시보드 로직 (RPC 조회 + QR 발급 + 위치 설정)
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let CRED=null; try{CRED=JSON.parse(sessionStorage.getItem('hw_admin')||'null')}catch(e){}
+const TEAM_ORDER=['지원','G1','G2','G3'], ROLE_ORDER=['Leader','System','Forklift','InOut','Manager','HR'];
+const ROLE_KO={Leader:'조장',System:'시스템',Forklift:'지게차',InOut:'입출고',Manager:'매니저',HR:'HR'};
+const today=()=> new Date().toISOString().slice(0,10);
+const hm=ts=> ts? new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
+
+async function login(){
+  const u=$('#u').value.trim(), p=$('#p').value;
+  try{
+    const r=await rpc('haewoo_admin_login',{p_username:u,p_passcode:p});
+    if(!r.ok){ $('#lerr').textContent=r.message; $('#lerr').style.display='block'; return; }
+    CRED={u,p,name:r.name,level:r.level}; sessionStorage.setItem('hw_admin',JSON.stringify(CRED));
+    boot();
+  }catch(e){ $('#lerr').textContent='연결 오류: '+e.message; $('#lerr').style.display='block'; }
+}
+function logout(){ sessionStorage.removeItem('hw_admin'); location.reload(); }
+function args(extra){ return Object.assign({p_username:CRED.u,p_passcode:CRED.p}, extra||{}); }
+
+function boot(){
+  $('#login').style.display='none'; $('#app').style.display='block';
+  $('#whoami').textContent=`${CRED.name||CRED.u} (${CRED.level==='admin'?'관리자':'중간관리자'})`;
+  $$('.tab').forEach(t=>t.onclick=()=>{ $$('.tab').forEach(x=>x.classList.toggle('on',x===t)); show(t.dataset.v); });
+  show('today');
+}
+function show(v){ ({today:vToday,log:vLog,shift:vShift,qr:vQR,loc:vLoc,bot:vBot,quote:vQuote}[v])(); }
+
+async function vToday(){
+  $('#view').innerHTML=`<div class="bar"><b>오늘 현황</b><input type="date" id="d" value="${today()}"><span class="muted">조별 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>`;
+  $('#d').onchange=()=>loadToday($('#d').value);
+  loadToday(today());
+}
+async function loadToday(d){
+  const r=await rpc('haewoo_roster',args({p_date:d}));
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
+  const rows=r.rows||[]; const inN=rows.filter(x=>x.in_ts).length, outN=rows.filter(x=>x.out_ts).length, working=rows.filter(x=>x.in_ts&&!x.out_ts).length;
+  let h=`<div class="kpis">
+    <div class="kpi"><div class="n">${rows.length}</div><div class="l">총원</div></div>
+    <div class="kpi"><div class="n">${inN}</div><div class="l">출근</div></div>
+    <div class="kpi"><div class="n">${working}</div><div class="l">근무중</div></div>
+    <div class="kpi"><div class="n">${outN}</div><div class="l">퇴근</div></div></div>`;
+  for(const tm of TEAM_ORDER){
+    const g=rows.filter(x=>x.team===tm); if(!g.length) continue;
+    g.sort((a,b)=>ROLE_ORDER.indexOf(a.role)-ROLE_ORDER.indexOf(b.role)||a.emp_no-b.emp_no);
+    h+=`<div class="grp"><h3><span>${tm==='지원'?'지원 (Support)':tm}</span><span class="cnt">${g.length}명</span></h3>
+      <table><thead><tr><th>#</th><th>이름</th><th>업무</th><th>출근</th><th>퇴근</th><th>상태</th></tr></thead><tbody>`;
+    for(const e of g){
+      const st = e.in_ts&&e.out_ts? '<span class="pill out">퇴근</span>' : e.in_ts? '<span class="pill in">근무중</span>' : '<span class="pill no">미출근</span>';
+      h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${hm(e.in_ts)}</td><td>${hm(e.out_ts)}</td><td>${st}</td></tr>`;
+    }
+    h+='</tbody></table></div>';
+  }
+  $('#body').innerHTML=h;
+}
+
+async function vLog(){
+  $('#view').innerHTML=`<div class="bar"><b>출퇴근 이력</b><input type="date" id="d" value="${today()}"></div><div id="body" class="muted">불러오는 중…</div>`;
+  $('#d').onchange=()=>loadLog($('#d').value); loadLog(today());
+}
+async function loadLog(d){
+  const r=await rpc('haewoo_attendance_log',args({p_date:d}));
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
+  const rows=r.rows||[];
+  if(!rows.length){ $('#body').innerHTML='<div class="grp"><h3><span>'+d+'</span></h3><table><tbody><tr><td class="muted" style="padding:18px">기록 없음</td></tr></tbody></table></div>'; return; }
+  let h=`<div class="grp"><h3><span>${d} · ${rows.length}건</span></h3><table><thead><tr><th>시간</th><th>#</th><th>이름</th><th>조</th><th>구분</th><th>거리</th></tr></thead><tbody>`;
+  for(const e of rows){
+    h+=`<tr><td>${new Date(e.ts).toLocaleTimeString('ko-KR')}</td><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td>
+      <td>${e.kind==='in'?'<span class="pill in">출근</span>':'<span class="pill out">퇴근</span>'}</td><td>${e.distance_m??''}m</td></tr>`;
+  }
+  $('#body').innerHTML=h+'</tbody></table></div>';
+}
+
+async function vShift(){
+  let sh=[]; try{ const r=await fetch(`${SB_URL}/rest/v1/haewoo_shift?select=*&order=sort`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); sh=await r.json(); }catch(e){}
+  let h='<div class="bar"><b>3교대 운영 (3 Shift)</b><span class="muted">2026-06-22 정상 운영 기준</span></div><div class="shift">';
+  for(const s of sh){ const inside=(s.name.match(/\(([^)]+)\)/)||[])[1]||''; const base=s.name.split('(')[0].trim();
+    h+=`<div class="scard"><div class="c">${s.code}조</div><div class="h">${inside}</div><div class="muted">${base}</div></div>`; }
+  h+='</div>';
+  const r=await rpc('haewoo_roster',args({p_date:today()}));
+  const rows=(r&&r.rows)||[];
+  for(const tm of TEAM_ORDER){
+    const g=rows.filter(x=>x.team===tm); if(!g.length) continue;
+    const by=k=>g.filter(x=>x.role===k).map(x=>x.full_name).join(', ')||'-';
+    h+=`<div class="grp"><h3><span>${tm==='지원'?'지원 (Support)':tm+' 조'}</span><span class="cnt">${g.length}명</span></h3>
+      <table><tbody>
+      ${tm==='지원'?`<tr><th style="width:90px">매니저</th><td>${by('Manager')}</td></tr><tr><th>HR</th><td>${by('HR')}</td></tr>`:
+      `<tr><th style="width:90px">조장</th><td>${by('Leader')}</td></tr>
+      <tr><th>시스템</th><td>${by('System')}</td></tr>
+      <tr><th>지게차</th><td>${by('Forklift')}</td></tr>
+      <tr><th>입출고</th><td>${by('InOut')}</td></tr>`}
+      </tbody></table></div>`;
+  }
+  $('#view').innerHTML=h;
+}
+
+async function vQR(){
+  $('#view').innerHTML='<div class="bar"><b>직원 QR 발급</b><span class="muted">각 직원이 본인 QR을 휴대폰에서 열어 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>';
+  const r=await rpc('haewoo_qr_list',args());
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
+  const base=location.origin+location.pathname.replace(/attendance\.html$/,'')+'checkin.html?t=';
+  $('#body').innerHTML='<div class="qrgrid" id="qg"></div>';
+  for(const e of r.rows){
+    const url=base+e.token;
+    const c=document.createElement('div'); c.className='qc';
+    c.innerHTML=`<div class="nm">${e.full_name}</div><div class="mt">${e.team} · ${ROLE_KO[e.role]||e.role} · #${e.emp_no}</div><div class="qimg"></div><button data-u="${url}">링크 복사</button>`;
+    $('#qg').appendChild(c);
+    new QRCode(c.querySelector('.qimg'),{text:url,width:132,height:132,correctLevel:QRCode.CorrectLevel.M});
+    c.querySelector('button').onclick=ev=>{ navigator.clipboard.writeText(ev.target.dataset.u); ev.target.textContent='복사됨 ✓'; setTimeout(()=>ev.target.textContent='링크 복사',1200); };
+  }
+}
+
+async function vLoc(){
+  let loc={}; try{ const r=await fetch(`${SB_URL}/rest/v1/haewoo_work_location?id=eq.1&select=*`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); loc=(await r.json())[0]||{}; }catch(e){}
+  $('#view').innerHTML=`<div class="bar"><b>기준 위치 · GPS 25m</b></div>
+   <div class="note">
+     <div>현재 기준점: <b>${loc.name||'-'}</b></div>
+     <div class="muted">위도 ${loc.lat??'-'} · 경도 ${loc.lng??'-'} · 반경 ${loc.radius_m??25}m</div>
+     <div style="margin:14px 0">반경(m): <input type="number" id="rad" value="${loc.radius_m??25}" min="5" max="500"> &nbsp;
+       <button id="setHere">📍 현재 내 위치를 기준점으로 설정</button></div>
+     <div id="msg" class="muted"></div>
+     <div class="muted" style="margin-top:10px">※ 창고(V2) 안에서 이 버튼을 누르면 정확한 기준점이 저장됩니다. 직원 출퇴근은 이 점에서 반경 ${loc.radius_m??25}m 이내만 인정됩니다.</div>
+   </div>`;
+  $('#setHere').onclick=()=>{
+    $('#msg').textContent='위치 측정 중…';
+    navigator.geolocation.getCurrentPosition(async p=>{
+      const r=await rpc('haewoo_set_location',args({p_lat:p.coords.latitude,p_lng:p.coords.longitude,p_radius:+$('#rad').value,p_name:'V2 Warehouse (Samsung Display Vietnam)'}));
+      $('#msg').textContent=r.ok?'✓ 기준점이 저장되었습니다. ('+p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6)+')':r.message;
+      if(r.ok) setTimeout(vLoc,900);
+    }, e=>$('#msg').textContent='위치를 가져올 수 없습니다. GPS를 켜세요.', {enableHighAccuracy:true,timeout:15000});
+  };
+}
+
+async function vBot(){
+  $('#view').innerHTML='<div class="bar"><b>해우봇 문의</b><span class="muted">방문자 질문 누적 (자주 묻는 항목 DB)</span></div><div id="body" class="muted">불러오는 중…</div>';
+  const r=await rpc('haewoo_bot_log',args({p_limit:200}));
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
+  const TOPIC={quote:'견적',shipping:'운송',customs:'통관/EDI',warehouse:'창고',contact:'연락처',location:'위치',hiring:'채용',greeting:'인사',other:'기타'};
+  let h='<div class="kpis">';
+  for(const t of (r.topics||[])) h+=`<div class="kpi"><div class="n">${t.cnt}</div><div class="l">${TOPIC[t.topic]||t.topic||'-'}</div></div>`;
+  h+='</div>';
+  h+='<div class="grp"><h3><span>최근 질문 ('+(r.recent||[]).length+')</span></h3><table><thead><tr><th>시간</th><th>분류</th><th>언어</th><th>질문</th></tr></thead><tbody>';
+  if(!(r.recent||[]).length) h+='<tr><td class="muted" colspan="4" style="padding:18px">아직 문의가 없습니다.</td></tr>';
+  for(const q of (r.recent||[])) h+=`<tr><td>${new Date(q.ts).toLocaleString('ko-KR')}</td><td>${TOPIC[q.topic]||q.topic||''}</td><td>${q.lang||''}</td><td>${(q.msg||'').replace(/</g,'&lt;')}</td></tr>`;
+  $('#body').innerHTML=h+'</tbody></table></div>';
+}
+async function vQuote(){
+  $('#view').innerHTML='<div class="bar"><b>견적 문의</b><span class="muted">홈페이지 견적 요청 접수</span></div><div id="body" class="muted">불러오는 중…</div>';
+  const r=await rpc('haewoo_quote_list',args({p_limit:200}));
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
+  const rows=r.rows||[];
+  let h='<div class="grp"><h3><span>견적 요청 ('+rows.length+'건)</span></h3><table><thead><tr><th>접수</th><th>회사</th><th>담당</th><th>연락처</th><th>이메일</th><th>구간</th><th>내용</th></tr></thead><tbody>';
+  if(!rows.length) h+='<tr><td class="muted" colspan="7" style="padding:18px">접수된 견적이 없습니다.</td></tr>';
+  for(const q of rows) h+=`<tr><td>${new Date(q.ts).toLocaleString('ko-KR')}</td><td>${q.company||''}</td><td>${q.name||''}</td><td>${q.phone||''}</td><td>${q.email||''}</td><td>${(q.origin||'')}${q.destination?(' → '+q.destination):''}</td><td>${(q.message||'').replace(/</g,'&lt;')}</td></tr>`;
+  $('#body').innerHTML=h+'</tbody></table></div>';
+}
+$('#loginBtn').onclick=login;
+$('#p').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+$('#logout').onclick=logout;
+if(CRED) boot();
+</script>
+</body>
+</html>
