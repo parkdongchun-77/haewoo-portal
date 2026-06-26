@@ -10,14 +10,16 @@
 - Supabase Google provider 활성화 + Client ID/Secret 입력 완료.
 - 참고: Google **OAuth 동의 화면이 "테스트" 모드**. 일반 사용자도 쓰려면 Google Cloud → 대상(OAuth 동의 화면) → **앱 게시(프로덕션 전환)** 또는 테스트 사용자 추가.
 
-## ⏳ Kakao — 앱은 생성됨, 키 입력만 남음
-Kakao 앱 **"Haewoo Vina" (ID 1496475)** 이미 생성 완료. 남은 단계:
-1. developers.kakao.com → 내 애플리케이션 → Haewoo Vina → **앱 키**에서 **REST API 키** 복사. (= Supabase Client ID)
-2. **카카오 로그인** 메뉴 → 활성화 설정 **ON**.
-3. 같은 화면 **Redirect URI 등록**: `https://fnvtdvpfuevzukfndpek.supabase.co/auth/v1/callback`
-4. **카카오 로그인 → 보안** → **Client Secret 코드 생성** + 활성화 상태 **사용함**. (= Supabase Client Secret)
-5. **동의항목** → 닉네임/프로필 사진(필수 권장), 카카오계정(이메일) 선택.
-6. Supabase 대시보드 → Authentication → Sign In/Providers → **Kakao** 열기 → 활성화 → **Client ID = REST API 키**, **Client Secret = 4번 코드** 입력 → 저장.
+## ⛔ Kakao — 거의 완료, 단 "비즈 앱 전환" 필요 (사용자 본인인증)
+Kakao 앱 **"Haewoo Vina" (ID 1496475)** 생성 + 설정 대부분 완료:
+- REST API 키 `618b7cb65795b7d9ae7dc76d87e469e3` → Supabase Kakao Client ID 입력 완료
+- Client Secret `0vXasePJtgGabVAwT7hrDXIqv8cblzrD` → Supabase 입력 완료
+- 카카오 로그인 활성화 ON, Redirect URI `.../auth/v1/callback` 등록 완료
+- 동의항목 닉네임(profile_nickname) 필수 동의 설정 완료
+- Supabase Kakao provider 활성화 + 이메일없는사용자 허용 ON 완료
+
+**막힌 부분(KOE205)**: Supabase는 카카오에 항상 `account_email` scope를 요청하는데(클라이언트로 제거 불가), **개인(비즈 아님) 앱은 account_email이 "권한 없음"**이라 거부됨.
+**해결**: Kakao 앱을 **비즈 앱으로 전환**해야 함 → developers.kakao.com → 앱 → 비즈니스 → "비즈 앱 전환". 사업자번호 없으면 **본인인증 + 카카오비즈니스 약관 동의**로 개인 비즈 앱 전환 가능(사용자 직접). 전환 후 동의항목에서 **카카오계정(이메일)**을 "선택 동의", **프로필 사진**을 "선택 동의"로 설정하면 카카오 로그인 동작.
 
 ## ⏳ Facebook — 키만 등록하면 됨 (Google과 동일 패턴)
 1. developers.facebook.com → 앱 생성 → Facebook 로그인 추가.
