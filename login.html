@@ -86,7 +86,9 @@ document.querySelectorAll('.sbtn').forEach(b=>b.onclick=async()=>{
     location.href=`${SB_URL}/functions/v1/zalo-oauth/login?redirect=${encodeURIComponent(redirectTo)}`;
     return;
   }
-  const { error } = await sb.auth.signInWithOAuth({ provider:p, options:{ redirectTo } });
+  const opts = { redirectTo };
+  if(p==='kakao') opts.scopes='profile_nickname';  // 비즈앱 아닌 개인앱: 이메일 scope 제외
+  const { error } = await sb.auth.signInWithOAuth({ provider:p, options:opts });
   if(error) note(p+' 로그인 오류: '+error.message+'  (Supabase 대시보드에서 '+p+' 제공자 설정이 필요합니다)');
 });
 $('lo').onclick=async()=>{ await sb.auth.signOut(); refresh(); };
