@@ -278,36 +278,35 @@ function renderRota(m){
   $('#body').innerHTML=h+'</tbody></table></div>';
 }
 
-/* 급여 계산 (스케줄 기준) */
-let PAY_ROWS=[];
+/* 급여 계산 (실제 출퇴근 기준: 정규/OT/야간) */
+let PAY_DATA=[];
 async function vPay(){
   const m=curMonth();
-  $('#view').innerHTML=`<div class="bar"><b>급여 계산</b><input type="month" id="pm" value="${m}">
-    <span class="muted">시급</span><input type="number" id="rate" value="30000" min="0" step="1000" style="width:100px"><span class="muted">₫ · 야간 +30%(베트남 노동법)</span></div>
+  $('#view').innerHTML=`<div class="bar"><b>급여 계산 (실제 출퇴근 기준)</b><input type="month" id="pm" value="${m}">
+    <span class="muted">시급</span><input type="number" id="rate" value="30000" min="0" step="1000" style="width:100px"><span class="muted">₫ · OT +50% · 야간 +30%</span></div>
     <div id="body" class="muted">불러오는 중…</div>`;
-  const reload=()=>renderPay($('#pm').value,+$('#rate').value||0);
-  $('#pm').onchange=reload; $('#rate').oninput=reload;
-  const r=await rpc('haewoo_roster',args({p_date:today()}));
-  PAY_ROWS=(r&&r.rows)||[];
-  renderPay(m,30000);
+  $('#pm').onchange=loadPay; $('#rate').oninput=()=>renderPay(+$('#rate').value||0);
+  loadPay();
 }
-function renderPay(m,rate){
-  const [y,mo]=m.split('-').map(Number); const days=new Date(y,mo,0).getDate();
+async function loadPay(){
+  const r=await rpc('haewoo_payroll_month',args({p_month:$('#pm').value}));
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+(r.message||'오류')+'</span>'; return; }
+  PAY_DATA=r.rows||[];
+  renderPay(+$('#rate').value||0);
+}
+function renderPay(rate){
   const fmt=n=>Math.round(n).toLocaleString('vi-VN')+'₫';
-  const rows=[...PAY_ROWS].sort((a,b)=>a.emp_no-b.emp_no);
-  let tot=0;
-  let h='<div class="grp"><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>근무일</th><th>야간일</th><th>기본급</th><th>야간수당</th><th>합계</th></tr></thead><tbody>';
-  for(const e of rows){
-    let wd=0,nd=0;
-    for(let d=1;d<=days;d++){ const dt=new Date(y,mo-1,d);
-      if(e.team==='지원'){ if(dt.getDay()!==0) wd++; }
-      else { const s=groupShift(e.team,dt); if(s){ wd++; if(s==='N') nd++; } }
-    }
-    const basic=wd*8*rate, night=nd*8*rate*0.30, sum=basic+night; tot+=sum;
-    h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${wd}</td><td>${nd}</td><td>${fmt(basic)}</td><td>${fmt(night)}</td><td><b>${fmt(sum)}</b></td></tr>`;
+  const hh=m=>(m/60).toFixed(1);
+  let tBase=0,tOt=0,tNight=0,tSum=0;
+  let h='<div class="grp"><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>근무일</th><th>정규(h)</th><th>OT(h)</th><th>야간(h)</th><th>기본급</th><th>OT수당</th><th>야간수당</th><th>합계</th></tr></thead><tbody>';
+  for(const e of PAY_DATA){
+    const base=(e.total_min/60)*rate, ot=(e.ot_min/60)*rate*0.5, night=(e.night_min/60)*rate*0.3, sum=base+ot+night;
+    tBase+=base;tOt+=ot;tNight+=night;tSum+=sum;
+    h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td>${e.work_days}</td><td>${hh(e.reg_min)}</td><td>${hh(e.ot_min)}</td><td>${hh(e.night_min)}</td><td>${fmt(base)}</td><td>${fmt(ot)}</td><td>${fmt(night)}</td><td><b>${fmt(sum)}</b></td></tr>`;
   }
-  h+=`</tbody><tfoot><tr><th colspan="8" style="text-align:right">총 인건비 (${rows.length}명)</th><th>${fmt(tot)}</th></tr></tfoot></table></div>
-   <div class="muted" style="margin:10px 0;font-size:12px">※ 회전표 스케줄 기준 예상 급여(1일 8시간). 실제 출퇴근 기록 기반 정산과 연장근로(OT 150%)는 백엔드 집계 연결 시 추가됩니다.</div>`;
+  if(!PAY_DATA.length) h+='<tr><td class="muted" colspan="11" style="padding:18px">출퇴근 기록이 없습니다.</td></tr>';
+  h+=`</tbody><tfoot><tr><th colspan="7" style="text-align:right">총 인건비</th><th>${fmt(tBase)}</th><th>${fmt(tOt)}</th><th>${fmt(tNight)}</th><th>${fmt(tSum)}</th></tr></tfoot></table></div>
+   <div class="muted" style="margin:10px 0;font-size:12px">※ 실제 출근~퇴근 기록 기준. 정규=1일 8시간 이하, OT=8시간 초과(+50%), 야간=스케줄상 야간조 근무일(+30%, 베트남 노동법).</div>`;
   $('#body').innerHTML=h;
 }
 $('#loginBtn').onclick=login;
