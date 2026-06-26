@@ -36,6 +36,10 @@ th,td{padding:9px 12px;text-align:left;border-top:1px solid var(--line)}
 th{background:#fafbfd;color:var(--muted);font-weight:600;font-size:12px}
 .pill{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700}
 .pill.in{background:#e7f6ee;color:var(--in)}.pill.out{background:#fdece7;color:var(--out)}.pill.no{background:#eef0f4;color:#98a0b0}
+.pill.sM{background:#fff4d6;color:#9a6b00}.pill.sA{background:#e2eefb;color:#2563a6}.pill.sN{background:#e7e0f7;color:#5b3ea8}
+tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
+.bar input[type=month]{padding:8px 10px;border:1px solid var(--line);border-radius:9px}
+.bar input[type=number]{padding:8px 10px;border:1px solid var(--line);border-radius:9px}
 .role{color:var(--muted);font-size:12px}
 .shift{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .scard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
@@ -75,6 +79,8 @@ th{background:#fafbfd;color:var(--muted);font-weight:600;font-size:12px}
     <div class="tab on" data-v="today">오늘 현황</div>
     <div class="tab" data-v="log">출퇴근 이력</div>
     <div class="tab" data-v="shift">3교대 / 조 편성</div>
+    <div class="tab" data-v="rota">회전표</div>
+    <div class="tab" data-v="pay">급여</div>
     <div class="tab" data-v="qr">QR 발급</div>
     <div class="tab" data-v="loc">기준 위치</div>
     <div class="tab" data-v="bot">해우봇 문의</div>
@@ -112,7 +118,14 @@ function boot(){
   $$('.tab').forEach(t=>t.onclick=()=>{ $$('.tab').forEach(x=>x.classList.toggle('on',x===t)); show(t.dataset.v); });
   show('today');
 }
-function show(v){ ({today:vToday,log:vLog,shift:vShift,qr:vQR,loc:vLoc,bot:vBot,quote:vQuote}[v])(); }
+function show(v){ ({today:vToday,log:vLog,shift:vShift,rota:vRota,pay:vPay,qr:vQR,loc:vLoc,bot:vBot,quote:vQuote}[v])(); }
+
+// 3교대 회전 로직 (2026-06-22 월요일 시작, 주간회전, 일요일 휴무)
+const SHIFT_BASE=Date.UTC(2026,5,22);
+function weekIdx(dt){ return Math.floor((Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())-SHIFT_BASE)/(7*86400000)); }
+function groupShift(team,dt){ if(dt.getDay()===0) return null; const w=((weekIdx(dt)%3)+3)%3; const order=['M','A','N']; const gi={G1:0,G2:1,G3:2}[team]; if(gi==null) return null; return order[(gi+w)%3]; }
+function shiftPill(s){ const x={M:['주간','sM'],A:['오후','sA'],N:['야간','sN']}[s]; return `<span class="pill ${x[1]}">${x[0]}</span>`; }
+const curMonth=()=> new Date().toISOString().slice(0,7);
 
 async function vToday(){
   $('#view').innerHTML=`<div class="bar"><b>오늘 현황</b><input type="date" id="d" value="${today()}"><span class="muted">조별 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>`;
@@ -241,6 +254,61 @@ async function vQuote(){
   if(!rows.length) h+='<tr><td class="muted" colspan="7" style="padding:18px">접수된 견적이 없습니다.</td></tr>';
   for(const q of rows) h+=`<tr><td>${new Date(q.ts).toLocaleString('ko-KR')}</td><td>${q.company||''}</td><td>${q.name||''}</td><td>${q.phone||''}</td><td>${q.email||''}</td><td>${(q.origin||'')}${q.destination?(' → '+q.destination):''}</td><td>${(q.message||'').replace(/</g,'&lt;')}</td></tr>`;
   $('#body').innerHTML=h+'</tbody></table></div>';
+}
+/* 3교대 회전표 */
+function vRota(){
+  const m=curMonth();
+  $('#view').innerHTML=`<div class="bar"><b>3교대 회전표</b><input type="month" id="rm" value="${m}"><span class="muted">2026-06-22(월) 시작 · 매주 주간→오후→야간 순환 · 일요일 휴무</span></div>
+   <div class="shift">
+     <div class="scard"><div class="c">주간 (M)</div><div class="h">06–14</div><div class="muted">Day</div></div>
+     <div class="scard"><div class="c">오후 (A)</div><div class="h">14–22</div><div class="muted">Afternoon</div></div>
+     <div class="scard"><div class="c">야간 (N)</div><div class="h">22–06</div><div class="muted">Night +30%</div></div>
+   </div><div id="body"></div>`;
+  $('#rm').onchange=()=>renderRota($('#rm').value);
+  renderRota(m);
+}
+function renderRota(m){
+  const [y,mo]=m.split('-').map(Number); const days=new Date(y,mo,0).getDate(); const dn=['일','월','화','수','목','금','토'];
+  let h='<div class="grp"><table><thead><tr><th>날짜</th><th>요일</th><th>G1</th><th>G2</th><th>G3</th></tr></thead><tbody>';
+  for(let d=1;d<=days;d++){ const dt=new Date(y,mo-1,d); const sun=dt.getDay()===0;
+    h+=`<tr${sun?' style="background:#fafbfd"':''}><td>${mo}/${d}</td><td>${dn[dt.getDay()]}</td>`;
+    for(const g of ['G1','G2','G3']){ const s=groupShift(g,dt); h+=`<td>${s?shiftPill(s):'<span class="pill no">휴무</span>'}</td>`; }
+    h+='</tr>';
+  }
+  $('#body').innerHTML=h+'</tbody></table></div>';
+}
+
+/* 급여 계산 (스케줄 기준) */
+let PAY_ROWS=[];
+async function vPay(){
+  const m=curMonth();
+  $('#view').innerHTML=`<div class="bar"><b>급여 계산</b><input type="month" id="pm" value="${m}">
+    <span class="muted">시급</span><input type="number" id="rate" value="30000" min="0" step="1000" style="width:100px"><span class="muted">₫ · 야간 +30%(베트남 노동법)</span></div>
+    <div id="body" class="muted">불러오는 중…</div>`;
+  const reload=()=>renderPay($('#pm').value,+$('#rate').value||0);
+  $('#pm').onchange=reload; $('#rate').oninput=reload;
+  const r=await rpc('haewoo_roster',args({p_date:today()}));
+  PAY_ROWS=(r&&r.rows)||[];
+  renderPay(m,30000);
+}
+function renderPay(m,rate){
+  const [y,mo]=m.split('-').map(Number); const days=new Date(y,mo,0).getDate();
+  const fmt=n=>Math.round(n).toLocaleString('vi-VN')+'₫';
+  const rows=[...PAY_ROWS].sort((a,b)=>a.emp_no-b.emp_no);
+  let tot=0;
+  let h='<div class="grp"><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>근무일</th><th>야간일</th><th>기본급</th><th>야간수당</th><th>합계</th></tr></thead><tbody>';
+  for(const e of rows){
+    let wd=0,nd=0;
+    for(let d=1;d<=days;d++){ const dt=new Date(y,mo-1,d);
+      if(e.team==='지원'){ if(dt.getDay()!==0) wd++; }
+      else { const s=groupShift(e.team,dt); if(s){ wd++; if(s==='N') nd++; } }
+    }
+    const basic=wd*8*rate, night=nd*8*rate*0.30, sum=basic+night; tot+=sum;
+    h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${wd}</td><td>${nd}</td><td>${fmt(basic)}</td><td>${fmt(night)}</td><td><b>${fmt(sum)}</b></td></tr>`;
+  }
+  h+=`</tbody><tfoot><tr><th colspan="8" style="text-align:right">총 인건비 (${rows.length}명)</th><th>${fmt(tot)}</th></tr></tfoot></table></div>
+   <div class="muted" style="margin:10px 0;font-size:12px">※ 회전표 스케줄 기준 예상 급여(1일 8시간). 실제 출퇴근 기록 기반 정산과 연장근로(OT 150%)는 백엔드 집계 연결 시 추가됩니다.</div>`;
+  $('#body').innerHTML=h;
 }
 $('#loginBtn').onclick=login;
 $('#p').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
