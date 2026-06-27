@@ -346,9 +346,9 @@ async function loadEmp(){
   const r=await rpc('haewoo_employee_all',args());
   if(!r.ok){ $('#body').innerHTML='<span class="muted">'+(r.message||'오류')+'</span>'; return; }
   const rows=r.rows||[];
-  let h='<div class="grp"><h3><span>전체 직원 ('+rows.length+')</span></h3><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>성별</th><th>전화</th><th>상태</th><th>관리</th></tr></thead><tbody>';
+  let h='<div class="grp"><h3><span>전체 직원 ('+rows.length+')</span></h3><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>성별</th><th>이메일</th><th>전화</th><th>상태</th><th>관리</th></tr></thead><tbody>';
   for(const e of rows){
-    h+=`<tr${e.active?'':' style="opacity:.5"'}><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${e.gender||''}</td><td>${e.phone||''}</td>
+    h+=`<tr${e.active?'':' style="opacity:.5"'}><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${e.gender||''}</td><td class="muted" style="font-size:12px">${e.email||''}</td><td>${e.phone||''}</td>
       <td>${e.active?'<span class="pill in">재직</span>':'<span class="pill no">비활성</span>'}</td>
       <td><button class="ebtn" data-edit='${JSON.stringify(e).replace(/'/g,"&#39;")}'>수정</button> <button class="ebtn" data-act="${e.emp_no}" data-on="${e.active?1:0}">${e.active?'비활성화':'활성화'}</button></td></tr>`;
   }
@@ -365,12 +365,13 @@ function empForm(e){
    <span>조</span><select id="f_tm">${teams.map(t=>`<option ${e.team===t?'selected':''}>${t}</option>`).join('')}</select>
    <span>업무</span><select id="f_rl">${roles.map(r=>`<option value="${r}" ${e.role===r?'selected':''}>${ROLE_KO[r]||r}</option>`).join('')}</select>
    <span>성별</span><select id="f_g"><option ${e.gender==='M'?'selected':''}>M</option><option ${e.gender==='F'?'selected':''}>F</option></select>
+   <span>이메일</span><input id="f_em" value="${e.email||''}" placeholder="소셜 로그인 매칭용" style="width:220px">
    <button id="f_save">저장</button><button id="f_cancel" style="background:#f0f2f6;color:#33415a">취소</button></div>
    <div id="f_msg" class="muted" style="margin-top:8px"></div></div>`;
   $('#f_cancel').onclick=()=>$('#empForm').innerHTML='';
   $('#f_save').onclick=async()=>{
     if(!$('#f_no').value){ $('#f_msg').textContent='사번을 입력하세요.'; return; }
-    const r=await rpc('haewoo_employee_upsert',args({p_emp_no:+$('#f_no').value,p_full_name:$('#f_nm').value.trim(),p_team:$('#f_tm').value,p_role:$('#f_rl').value,p_gender:$('#f_g').value}));
+    const r=await rpc('haewoo_employee_upsert',args({p_emp_no:+$('#f_no').value,p_full_name:$('#f_nm').value.trim(),p_team:$('#f_tm').value,p_role:$('#f_rl').value,p_gender:$('#f_g').value,p_email:$('#f_em').value.trim()}));
     if(r.ok){ $('#empForm').innerHTML=''; loadEmp(); } else $('#f_msg').textContent=r.message||'오류';
   };
 }

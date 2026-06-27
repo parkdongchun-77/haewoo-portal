@@ -58,15 +58,16 @@ body{font-family:'Noto Sans KR',system-ui,sans-serif;background:linear-gradient(
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="haewoo-sb.js"></script>
 <script>
-// 직원 QR 출퇴근 로직 (위치 측정 → 서버 RPC 저장)
-const T = new URLSearchParams(location.search).get('t');
+// 직원 QR/소셜 출퇴근 로직 (위치 측정 → 서버 RPC 저장)
+let T = new URLSearchParams(location.search).get('t');
 let LANG = 'vi', EMP = null, busy = false;
 const $ = id => document.getElementById(id);
 const L = {
-  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m', locask:'Đang kiểm tra vị trí… Hãy cho phép truy cập vị trí.', locok:'Đã xác định vị trí. Có thể chấm công.', locneed:'Cần CHO PHÉP vị trí (GPS) mới chấm công được. Nhấn để thử lại.' },
-  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m', locask:'위치 확인 중… 위치 접근을 허용해 주세요.', locok:'위치 확인됨. 출퇴근 가능합니다.', locneed:'위치(GPS) 권한을 허용해야 출퇴근이 됩니다. 눌러서 다시 시도.' }
+  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m', locask:'Đang kiểm tra vị trí… Hãy cho phép truy cập vị trí.', locok:'Đã xác định vị trí. Có thể chấm công.', locneed:'Cần CHO PHÉP vị trí (GPS) mới chấm công được. Nhấn để thử lại.', needlogin:'Cần đăng nhập. <a href="login.html">Đăng nhập</a>', notreg:'Tài khoản chưa được đăng ký. Hãy liên hệ quản trị viên.' },
+  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m', locask:'위치 확인 중… 위치 접근을 허용해 주세요.', locok:'위치 확인됨. 출퇴근 가능합니다.', locneed:'위치(GPS) 권한을 허용해야 출퇴근이 됩니다. 눌러서 다시 시도.', needlogin:'로그인이 필요합니다. <a href="login.html">로그인</a>', notreg:'등록되지 않은 계정입니다. 관리자에게 등록을 요청하세요.' }
 };
 const ROLE = { Leader:'조장 / Leader', System:'시스템 / System', Forklift:'지게차 / Forklift', InOut:'입출고 / In-Out', Manager:'매니저', HR:'HR' };
 
@@ -90,8 +91,22 @@ function render(){
 }
 function showStatus(cls,msg){ const s=$('status'); s.className='status '+cls; s.innerHTML=msg; s.style.display='block'; }
 
+// 소셜 로그인 세션의 이메일을 관리자가 등록한 직원과 매칭 (QR 없이 본인 출퇴근)
+async function trySocialMatch(){
+  try{
+    const sb = supabase.createClient(SB_URL, SB_KEY);
+    const { data:{ session } } = await sb.auth.getSession();
+    if(!session){ $('nm').textContent='—'; showStatus('err', L[LANG].needlogin); return null; }
+    const meta=session.user.user_metadata||{};
+    const email = session.user.email || meta.email;
+    if(!email){ $('nm').textContent='—'; showStatus('err', L[LANG].notreg); return null; }
+    const r = await rpc('haewoo_employee_by_email',{p_email:email});
+    if(r.ok) return r.token;
+    $('nm').textContent='—'; showStatus('err', r.message||L[LANG].notreg); return null;
+  }catch(e){ $('nm').textContent='—'; showStatus('err','오류: '+(e.message||e)); return null; }
+}
 async function load(){
-  if(!T){ $('nm').textContent='—'; showStatus('err', L[LANG].noqr); return; }
+  if(!T){ T = await trySocialMatch(); if(!T) return; }
   try{
     const r = await rpc('haewoo_get_employee',{p_token:T});
     if(!r.ok){ $('nm').textContent='—'; showStatus('err', r.message||L[LANG].noqr); return; }

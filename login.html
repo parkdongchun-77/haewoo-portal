@@ -84,7 +84,9 @@ async function refresh(){
     $('me').style.display='block';
     $('nm').textContent=name; $('em').textContent=u.email||(u.app_metadata&&u.app_metadata.provider)||'';
     $('av').textContent=(name[0]||'H').toUpperCase();
-    $('go').href=NEXT;
+    $('go').href='checkin.html'; $('go').textContent='근태(출퇴근)으로 이동 →';
+    // 소셜 로그인 시 위치 공유 권한을 미리 요청
+    if(navigator.geolocation) navigator.geolocation.getCurrentPosition(()=>{},()=>{},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
   } else {
     $('btns').style.display='flex'; $('me').style.display='none';
     $('idlogin').style.display='flex'; $('dvd').style.display='flex';
