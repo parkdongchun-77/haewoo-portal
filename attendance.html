@@ -90,6 +90,7 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="haewoo-sb.js"></script>
 <script>
 // 관리자 대시보드 로직 (RPC 조회 + QR 발급 + 위치 설정)
@@ -283,9 +284,11 @@ let PAY_DATA=[];
 async function vPay(){
   const m=curMonth();
   $('#view').innerHTML=`<div class="bar"><b>급여 계산 (실제 출퇴근 기준)</b><input type="month" id="pm" value="${m}">
-    <span class="muted">시급</span><input type="number" id="rate" value="30000" min="0" step="1000" style="width:100px"><span class="muted">₫ · OT +50% · 야간 +30%</span></div>
+    <span class="muted">시급</span><input type="number" id="rate" value="30000" min="0" step="1000" style="width:100px"><span class="muted">₫ · OT +50% · 야간 +30%</span>
+    <button id="xlsx" style="margin-left:auto;background:#1f8a54;color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:700;cursor:pointer">⬇ 엑셀 다운로드</button></div>
     <div id="body" class="muted">불러오는 중…</div>`;
   $('#pm').onchange=loadPay; $('#rate').oninput=()=>renderPay(+$('#rate').value||0);
+  $('#xlsx').onclick=exportPayXlsx;
   loadPay();
 }
 async function loadPay(){
@@ -308,6 +311,23 @@ function renderPay(rate){
   h+=`</tbody><tfoot><tr><th colspan="7" style="text-align:right">총 인건비</th><th>${fmt(tBase)}</th><th>${fmt(tOt)}</th><th>${fmt(tNight)}</th><th>${fmt(tSum)}</th></tr></tfoot></table></div>
    <div class="muted" style="margin:10px 0;font-size:12px">※ 실제 출근~퇴근 기록 기준. 정규=1일 8시간 이하, OT=8시간 초과(+50%), 야간=스케줄상 야간조 근무일(+30%, 베트남 노동법).</div>`;
   $('#body').innerHTML=h;
+}
+function exportPayXlsx(){
+  if(!PAY_DATA.length){ alert('데이터가 없습니다.'); return; }
+  if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도하세요.'); return; }
+  const rate=+$('#rate').value||0, m=$('#pm').value, hh=mn=>+(mn/60).toFixed(2);
+  const aoa=[['해우비나 월별 급여 ('+m+')'],['시급 '+rate.toLocaleString('vi-VN')+'₫ · OT +50% · 야간 +30%'],[],
+    ['사번','이름','조','업무','근무일','정규(h)','OT(h)','야간(h)','기본급','OT수당','야간수당','합계']];
+  let tB=0,tO=0,tN=0,tS=0;
+  for(const e of PAY_DATA){ const base=(e.total_min/60)*rate, ot=(e.ot_min/60)*rate*0.5, night=(e.night_min/60)*rate*0.3, sum=base+ot+night;
+    tB+=base;tO+=ot;tN+=night;tS+=sum;
+    aoa.push([e.emp_no,e.full_name,e.team,(ROLE_KO[e.role]||e.role),e.work_days,hh(e.reg_min),hh(e.ot_min),hh(e.night_min),Math.round(base),Math.round(ot),Math.round(night),Math.round(sum)]);
+  }
+  aoa.push(['','','','합계','','','','',Math.round(tB),Math.round(tO),Math.round(tN),Math.round(tS)]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:6},{wch:20},{wch:6},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:13},{wch:12},{wch:12},{wch:14}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'급여 '+m);
+  XLSX.writeFile(wb, '해우비나_급여_'+m+'.xlsx');
 }
 $('#loginBtn').onclick=login;
 $('#p').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
