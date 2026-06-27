@@ -25,6 +25,12 @@
 .me .go{display:block;background:var(--navy);color:#fff;border-radius:12px;padding:13px;font-weight:700;text-decoration:none;margin-bottom:9px}
 .me .lo{display:block;background:#f0f2f6;color:#33415a;border:0;border-radius:12px;padding:11px;width:100%;cursor:pointer}
 .msg{display:none;background:#fdf3e7;border:1px solid #f0dcc0;color:#8a6d3b;font-size:12px;border-radius:10px;padding:10px;margin-bottom:14px;line-height:1.6}
+.idform{display:flex;flex-direction:column;gap:10px;margin-bottom:4px}
+.idform input{padding:13px 14px;border:1px solid var(--line);border-radius:12px;font-size:15px}
+.idform input:focus{outline:none;border-color:var(--gold)}
+.idform button{padding:13px;border:0;border-radius:12px;background:var(--navy);color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:14px 0}
+.divider:before,.divider:after{content:"";flex:1;height:1px;background:var(--line)}
 </style>
 </head>
 <body>
@@ -33,6 +39,13 @@
   <div class="sub" id="sub">소셜 계정으로 로그인 · Đăng nhập</div>
 
   <div class="msg" id="msg"></div>
+
+  <form class="idform" id="idlogin" onsubmit="return adminLogin(event)">
+    <input id="aid" placeholder="아이디" autocomplete="username">
+    <input id="apw" type="password" placeholder="비밀번호" autocomplete="current-password">
+    <button type="submit">로그인</button>
+  </form>
+  <div class="divider" id="dvd"><span>또는 소셜 계정으로</span></div>
 
   <div class="btns" id="btns">
     <button class="sbtn zalo" data-p="zalo"><span class="ic">Z</span>Zalo 로그인</button>
@@ -67,16 +80,32 @@ async function refresh(){
     const u=session.user, meta=u.user_metadata||{};
     const name=meta.full_name||meta.name||meta.user_name||u.email||'사용자';
     $('btns').style.display='none'; $('sub').textContent='로그인됨 · Đã đăng nhập';
+    $('idlogin').style.display='none'; $('dvd').style.display='none';
     $('me').style.display='block';
     $('nm').textContent=name; $('em').textContent=u.email||(u.app_metadata&&u.app_metadata.provider)||'';
     $('av').textContent=(name[0]||'H').toUpperCase();
     $('go').href=NEXT;
   } else {
     $('btns').style.display='flex'; $('me').style.display='none';
-    $('sub').textContent='소셜 계정으로 로그인 · Đăng nhập';
+    $('idlogin').style.display='flex'; $('dvd').style.display='flex';
+    $('sub').textContent='로그인 · Đăng nhập';
   }
 }
 function note(t){ $('msg').style.display='block'; $('msg').textContent=t; }
+
+// 아이디·비밀번호 기본 로그인 (Master·관리자, haewoo_admin)
+async function adminLogin(e){
+  e.preventDefault();
+  const u=$('aid').value.trim(), p=$('apw').value;
+  if(!u||!p){ note('아이디와 비밀번호를 입력하세요.'); return false; }
+  try{
+    const r=await rpc('haewoo_admin_login',{p_username:u,p_passcode:p});
+    if(!r.ok){ note(r.message||'아이디 또는 비밀번호가 올바르지 않습니다.'); return false; }
+    sessionStorage.setItem('hw_admin', JSON.stringify({u,p,name:r.name,level:r.level}));
+    location.href='attendance.html';
+  }catch(err){ note('연결 오류: '+err.message); }
+  return false;
+}
 
 document.querySelectorAll('.sbtn').forEach(b=>b.onclick=async()=>{
   const p=b.dataset.p;
