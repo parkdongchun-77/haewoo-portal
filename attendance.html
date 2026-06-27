@@ -52,6 +52,8 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
 .note{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;font-size:14px;line-height:1.9}
 .note input{padding:9px;border:1px solid var(--line);border-radius:9px;width:130px}
 .note button{padding:9px 14px;border:0;border-radius:9px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer}
+.note select{padding:9px;border:1px solid var(--line);border-radius:9px}
+.ebtn{font-size:12px;border:1px solid var(--line);background:#f7f9fc;border-radius:8px;padding:5px 10px;cursor:pointer}
 .muted{color:var(--muted)}
 @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.shift{grid-template-columns:1fr}}
 </style>
@@ -83,6 +85,7 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
     <div class="tab" data-v="pay">급여</div>
     <div class="tab" data-v="qr">QR 발급</div>
     <div class="tab" data-v="loc">기준 위치</div>
+    <div class="tab" data-v="emp">직원 관리</div>
     <div class="tab" data-v="bot">해우봇 문의</div>
     <div class="tab" data-v="quote">견적 문의</div>
   </div>
@@ -119,7 +122,7 @@ function boot(){
   $$('.tab').forEach(t=>t.onclick=()=>{ $$('.tab').forEach(x=>x.classList.toggle('on',x===t)); show(t.dataset.v); });
   show('today');
 }
-function show(v){ ({today:vToday,log:vLog,shift:vShift,rota:vRota,pay:vPay,qr:vQR,loc:vLoc,bot:vBot,quote:vQuote}[v])(); }
+function show(v){ ({today:vToday,log:vLog,shift:vShift,rota:vRota,pay:vPay,qr:vQR,loc:vLoc,emp:vEmp,bot:vBot,quote:vQuote}[v])(); }
 
 // 3교대 회전 로직 (2026-06-22 월요일 시작, 주간회전, 일요일 휴무)
 const SHIFT_BASE=Date.UTC(2026,5,22);
@@ -300,32 +303,76 @@ async function loadPay(){
 function renderPay(rate){
   const fmt=n=>Math.round(n).toLocaleString('vi-VN')+'₫';
   const hh=m=>(m/60).toFixed(1);
-  let tBase=0,tOt=0,tNight=0,tSum=0;
-  let h='<div class="grp"><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>근무일</th><th>정규(h)</th><th>OT(h)</th><th>야간(h)</th><th>기본급</th><th>OT수당</th><th>야간수당</th><th>합계</th></tr></thead><tbody>';
+  let tBase=0,tOt=0,tNight=0,tHol=0,tSum=0;
+  let h='<div class="grp"><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>근무일</th><th>OT(h)</th><th>야간(h)</th><th>휴일(h)</th><th>지각(분)</th><th>조퇴(분)</th><th>기본급</th><th>OT</th><th>야간</th><th>휴일</th><th>합계</th><th>경고</th></tr></thead><tbody>';
   for(const e of PAY_DATA){
-    const base=(e.total_min/60)*rate, ot=(e.ot_min/60)*rate*0.5, night=(e.night_min/60)*rate*0.3, sum=base+ot+night;
-    tBase+=base;tOt+=ot;tNight+=night;tSum+=sum;
-    h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td>${e.work_days}</td><td>${hh(e.reg_min)}</td><td>${hh(e.ot_min)}</td><td>${hh(e.night_min)}</td><td>${fmt(base)}</td><td>${fmt(ot)}</td><td>${fmt(night)}</td><td><b>${fmt(sum)}</b></td></tr>`;
+    const base=(e.total_min/60)*rate, ot=(e.ot_min/60)*rate*0.5, night=(e.night_min/60)*rate*0.3, hol=((e.holiday_min||0)/60)*rate*2.0, sum=base+ot+night+hol;
+    tBase+=base;tOt+=ot;tNight+=night;tHol+=hol;tSum+=sum;
+    const w=[];
+    if(e.ot_min/60>40) w.push('<span class="pill out">월40h↑</span>');
+    if((e.ytd_ot_min||0)/60>200) w.push('<span class="pill out">연200h↑</span>');
+    h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td>${e.work_days}</td><td>${hh(e.ot_min)}</td><td>${hh(e.night_min)}</td><td>${hh(e.holiday_min||0)}</td><td>${e.late_min||0}</td><td>${e.early_min||0}</td><td>${fmt(base)}</td><td>${fmt(ot)}</td><td>${fmt(night)}</td><td>${fmt(hol)}</td><td><b>${fmt(sum)}</b></td><td>${w.join(' ')}</td></tr>`;
   }
-  if(!PAY_DATA.length) h+='<tr><td class="muted" colspan="11" style="padding:18px">출퇴근 기록이 없습니다.</td></tr>';
-  h+=`</tbody><tfoot><tr><th colspan="7" style="text-align:right">총 인건비</th><th>${fmt(tBase)}</th><th>${fmt(tOt)}</th><th>${fmt(tNight)}</th><th>${fmt(tSum)}</th></tr></tfoot></table></div>
-   <div class="muted" style="margin:10px 0;font-size:12px">※ 실제 출근~퇴근 기록 기준. 정규=1일 8시간 이하, OT=8시간 초과(+50%), 야간=스케줄상 야간조 근무일(+30%, 베트남 노동법).</div>`;
+  if(!PAY_DATA.length) h+='<tr><td class="muted" colspan="15" style="padding:18px">출퇴근 기록이 없습니다.</td></tr>';
+  h+=`</tbody><tfoot><tr><th colspan="9" style="text-align:right">총 인건비</th><th>${fmt(tBase)}</th><th>${fmt(tOt)}</th><th>${fmt(tNight)}</th><th>${fmt(tHol)}</th><th>${fmt(tSum)}</th><th></th></tr></tfoot></table></div>
+   <div class="muted" style="margin:10px 0;font-size:12px">※ 실제 출근~퇴근 기준. OT 8h초과(+50%) · 야간(+30%) · 휴일근무(+200%, 총300%) · 지각·조퇴는 스케줄 교대시간 기준. 경고: OT 월40h·연200h 초과(베트남 노동법).</div>`;
   $('#body').innerHTML=h;
 }
+/* 직원 관리 */
+async function vEmp(){
+  $('#view').innerHTML=`<div class="bar"><b>직원 관리</b><button id="addEmp" style="margin-left:auto;background:var(--navy);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:700;cursor:pointer">+ 직원 추가</button></div>
+   <div id="empForm"></div><div id="body" class="muted">불러오는 중…</div>`;
+  $('#addEmp').onclick=()=>empForm({});
+  loadEmp();
+}
+async function loadEmp(){
+  const r=await rpc('haewoo_employee_all',args());
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+(r.message||'오류')+'</span>'; return; }
+  const rows=r.rows||[];
+  let h='<div class="grp"><h3><span>전체 직원 ('+rows.length+')</span></h3><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>성별</th><th>전화</th><th>상태</th><th>관리</th></tr></thead><tbody>';
+  for(const e of rows){
+    h+=`<tr${e.active?'':' style="opacity:.5"'}><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${e.gender||''}</td><td>${e.phone||''}</td>
+      <td>${e.active?'<span class="pill in">재직</span>':'<span class="pill no">비활성</span>'}</td>
+      <td><button class="ebtn" data-edit='${JSON.stringify(e).replace(/'/g,"&#39;")}'>수정</button> <button class="ebtn" data-act="${e.emp_no}" data-on="${e.active?1:0}">${e.active?'비활성화':'활성화'}</button></td></tr>`;
+  }
+  $('#body').innerHTML=h+'</tbody></table></div>';
+  $$('.ebtn[data-edit]').forEach(b=>b.onclick=()=>empForm(JSON.parse(b.dataset.edit)));
+  $$('.ebtn[data-act]').forEach(b=>b.onclick=async()=>{ await rpc('haewoo_employee_set_active',args({p_emp_no:+b.dataset.act,p_active:b.dataset.on==='0'})); loadEmp(); });
+}
+function empForm(e){
+  const teams=['지원','G1','G2','G3'], roles=['Leader','System','Forklift','InOut','Manager','HR'];
+  $('#empForm').innerHTML=`<div class="note" style="margin-bottom:14px"><b>${e.emp_no?'직원 수정 (#'+e.emp_no+')':'직원 추가'}</b>
+   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
+   <span>사번</span><input id="f_no" type="number" value="${e.emp_no||''}" style="width:80px">
+   <span>이름</span><input id="f_nm" value="${e.full_name||''}" style="width:180px">
+   <span>조</span><select id="f_tm">${teams.map(t=>`<option ${e.team===t?'selected':''}>${t}</option>`).join('')}</select>
+   <span>업무</span><select id="f_rl">${roles.map(r=>`<option value="${r}" ${e.role===r?'selected':''}>${ROLE_KO[r]||r}</option>`).join('')}</select>
+   <span>성별</span><select id="f_g"><option ${e.gender==='M'?'selected':''}>M</option><option ${e.gender==='F'?'selected':''}>F</option></select>
+   <button id="f_save">저장</button><button id="f_cancel" style="background:#f0f2f6;color:#33415a">취소</button></div>
+   <div id="f_msg" class="muted" style="margin-top:8px"></div></div>`;
+  $('#f_cancel').onclick=()=>$('#empForm').innerHTML='';
+  $('#f_save').onclick=async()=>{
+    if(!$('#f_no').value){ $('#f_msg').textContent='사번을 입력하세요.'; return; }
+    const r=await rpc('haewoo_employee_upsert',args({p_emp_no:+$('#f_no').value,p_full_name:$('#f_nm').value.trim(),p_team:$('#f_tm').value,p_role:$('#f_rl').value,p_gender:$('#f_g').value}));
+    if(r.ok){ $('#empForm').innerHTML=''; loadEmp(); } else $('#f_msg').textContent=r.message||'오류';
+  };
+}
+
 function exportPayXlsx(){
   if(!PAY_DATA.length){ alert('데이터가 없습니다.'); return; }
   if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도하세요.'); return; }
   const rate=+$('#rate').value||0, m=$('#pm').value, hh=mn=>+(mn/60).toFixed(2);
-  const aoa=[['해우비나 월별 급여 ('+m+')'],['시급 '+rate.toLocaleString('vi-VN')+'₫ · OT +50% · 야간 +30%'],[],
-    ['사번','이름','조','업무','근무일','정규(h)','OT(h)','야간(h)','기본급','OT수당','야간수당','합계']];
-  let tB=0,tO=0,tN=0,tS=0;
-  for(const e of PAY_DATA){ const base=(e.total_min/60)*rate, ot=(e.ot_min/60)*rate*0.5, night=(e.night_min/60)*rate*0.3, sum=base+ot+night;
-    tB+=base;tO+=ot;tN+=night;tS+=sum;
-    aoa.push([e.emp_no,e.full_name,e.team,(ROLE_KO[e.role]||e.role),e.work_days,hh(e.reg_min),hh(e.ot_min),hh(e.night_min),Math.round(base),Math.round(ot),Math.round(night),Math.round(sum)]);
+  const aoa=[['해우비나 월별 급여 ('+m+')'],['시급 '+rate.toLocaleString('vi-VN')+'₫ · OT +50% · 야간 +30% · 휴일 +200%'],[],
+    ['사번','이름','조','업무','근무일','정규(h)','OT(h)','야간(h)','휴일(h)','지각(분)','조퇴(분)','기본급','OT수당','야간수당','휴일수당','합계','경고']];
+  let tB=0,tO=0,tN=0,tH=0,tS=0;
+  for(const e of PAY_DATA){ const base=(e.total_min/60)*rate, ot=(e.ot_min/60)*rate*0.5, night=(e.night_min/60)*rate*0.3, hol=((e.holiday_min||0)/60)*rate*2.0, sum=base+ot+night+hol;
+    tB+=base;tO+=ot;tN+=night;tH+=hol;tS+=sum;
+    const w=[]; if(e.ot_min/60>40) w.push('월40h↑'); if((e.ytd_ot_min||0)/60>200) w.push('연200h↑');
+    aoa.push([e.emp_no,e.full_name,e.team,(ROLE_KO[e.role]||e.role),e.work_days,hh(e.reg_min),hh(e.ot_min),hh(e.night_min),hh(e.holiday_min||0),e.late_min||0,e.early_min||0,Math.round(base),Math.round(ot),Math.round(night),Math.round(hol),Math.round(sum),w.join(' ')]);
   }
-  aoa.push(['','','','합계','','','','',Math.round(tB),Math.round(tO),Math.round(tN),Math.round(tS)]);
+  aoa.push(['','','','합계','','','','','','','',Math.round(tB),Math.round(tO),Math.round(tN),Math.round(tH),Math.round(tS),'']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:6},{wch:20},{wch:6},{wch:10},{wch:8},{wch:8},{wch:8},{wch:8},{wch:13},{wch:12},{wch:12},{wch:14}];
+  ws['!cols']=[{wch:6},{wch:20},{wch:6},{wch:10},{wch:7},{wch:7},{wch:7},{wch:7},{wch:7},{wch:8},{wch:8},{wch:13},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'급여 '+m);
   XLSX.writeFile(wb, '해우비나_급여_'+m+'.xlsx');
 }
