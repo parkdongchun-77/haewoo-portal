@@ -65,8 +65,8 @@ const T = new URLSearchParams(location.search).get('t');
 let LANG = 'vi', EMP = null, busy = false;
 const $ = id => document.getElementById(id);
 const L = {
-  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m' },
-  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m' }
+  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m', locask:'Đang kiểm tra vị trí… Hãy cho phép truy cập vị trí.', locok:'Đã xác định vị trí. Có thể chấm công.', locneed:'Cần CHO PHÉP vị trí (GPS) mới chấm công được. Nhấn để thử lại.' },
+  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m', locask:'위치 확인 중… 위치 접근을 허용해 주세요.', locok:'위치 확인됨. 출퇴근 가능합니다.', locneed:'위치(GPS) 권한을 허용해야 출퇴근이 됩니다. 눌러서 다시 시도.' }
 };
 const ROLE = { Leader:'조장 / Leader', System:'시스템 / System', Forklift:'지게차 / Forklift', InOut:'입출고 / In-Out', Manager:'매니저', HR:'HR' };
 
@@ -95,15 +95,24 @@ async function load(){
   try{
     const r = await rpc('haewoo_get_employee',{p_token:T});
     if(!r.ok){ $('nm').textContent='—'; showStatus('err', r.message||L[LANG].noqr); return; }
-    EMP=r; $('btnIn').disabled=false; $('btnOut').disabled=false;
+    EMP=r;
     if(!EMP.phone) $('phoneBox').style.display='block';
     render();
+    askLocation();   // 접속 시 위치 권한 요청 — 허용해야 출/퇴근 가능
   }catch(e){ showStatus('err','연결 오류: '+e.message); }
 }
 
 function getPos(){
   return new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(
     p=>res(p), e=>rej(e), {enableHighAccuracy:true, timeout:15000, maximumAge:0}));
+}
+// 접속 시 위치 권한 요청. 허용해야 버튼 활성화(출/퇴근 가능)
+function askLocation(){
+  showStatus('info', L[LANG].locask);
+  navigator.geolocation.getCurrentPosition(
+    p=>{ $('btnIn').disabled=false; $('btnOut').disabled=false; showStatus('ok', L[LANG].locok); },
+    e=>{ $('btnIn').disabled=true; $('btnOut').disabled=true; const s=$('status'); s.className='status err'; s.textContent=L[LANG].locneed; s.style.display='block'; s.style.cursor='pointer'; s.onclick=askLocation; },
+    {enableHighAccuracy:true, timeout:15000, maximumAge:0});
 }
 async function punch(kind){
   if(busy||!EMP) return; busy=true;

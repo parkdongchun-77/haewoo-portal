@@ -89,6 +89,7 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
     <div class="tab" data-v="qr">QR 발급</div>
     <div class="tab" data-v="loc">기준 위치</div>
     <div class="tab" data-v="emp">직원 관리</div>
+    <div class="tab" data-v="xlcmp">엑셀 대조</div>
     <div class="tab" data-v="bot">해우봇 문의</div>
     <div class="tab" data-v="quote">견적 문의</div>
     <div class="tab" id="masterTab" data-v="master" style="display:none;color:#a8884d;font-weight:700">★ Master 전용</div>
@@ -128,7 +129,7 @@ function boot(){
   $$('.tab').forEach(t=>t.onclick=()=>{ $$('.tab').forEach(x=>x.classList.toggle('on',x===t)); show(t.dataset.v); });
   show('today');
 }
-function show(v){ if(v==='master'&&CRED.level!=='master'){ v='today'; } ({today:vToday,log:vLog,shift:vShift,rota:vRota,pay:vPay,qr:vQR,loc:vLoc,emp:vEmp,bot:vBot,quote:vQuote,master:vMaster}[v])(); }
+function show(v){ if(v==='master'&&CRED.level!=='master'){ v='today'; } ({today:vToday,log:vLog,shift:vShift,rota:vRota,pay:vPay,qr:vQR,loc:vLoc,emp:vEmp,xlcmp:vXlcmp,bot:vBot,quote:vQuote,master:vMaster}[v])(); }
 
 // 3교대 회전 로직 (2026-06-22 월요일 시작, 주간회전, 일요일 휴무)
 const SHIFT_BASE=Date.UTC(2026,5,22);
@@ -176,7 +177,7 @@ async function loadLog(d){
   if(!rows.length){ $('#body').innerHTML='<div class="grp"><h3><span>'+d+'</span></h3><table><tbody><tr><td class="muted" style="padding:18px">기록 없음</td></tr></tbody></table></div>'; return; }
   let h=`<div class="grp"><h3><span>${d} · ${rows.length}건</span></h3><table><thead><tr><th>시간</th><th>#</th><th>이름</th><th>조</th><th>구분</th><th>거리</th></tr></thead><tbody>`;
   for(const e of rows){
-    h+=`<tr><td>${new Date(e.ts).toLocaleTimeString('ko-KR')}</td><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td>
+    h+=`<tr><td>${new Date(e.ts).toLocaleString('ko-KR')}</td><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td>
       <td>${e.kind==='in'?'<span class="pill in">출근</span>':'<span class="pill out">퇴근</span>'}</td><td>${e.distance_m??''}m</td></tr>`;
   }
   $('#body').innerHTML=h+'</tbody></table></div>';
@@ -227,8 +228,12 @@ async function vLoc(){
    <div class="note">
      <div>현재 기준점: <b>${loc.name||'-'}</b></div>
      <div class="muted">위도 ${loc.lat??'-'} · 경도 ${loc.lng??'-'} · 반경 ${loc.radius_m??25}m</div>
-     <div style="margin:14px 0">반경(m): <input type="number" id="rad" value="${loc.radius_m??25}" min="5" max="500"> &nbsp;
-       <button id="setHere">📍 현재 내 위치를 기준점으로 설정</button></div>
+     <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+       <span>반경(m)</span><input type="number" id="rad" value="${loc.radius_m??25}" min="5" max="500" style="width:80px">
+       <span>위도</span><input type="number" id="mlat" step="0.000001" value="${loc.lat??21.204250}" style="width:130px">
+       <span>경도</span><input type="number" id="mlng" step="0.000001" value="${loc.lng??105.988889}" style="width:130px">
+       <button id="setCoord">이 좌표로 고정 저장</button>
+       <button id="setHere" style="background:#f0f2f6;color:#33415a">📍 현재 내 위치로</button></div>
      <div id="msg" class="muted"></div>
      <div class="muted" style="margin-top:10px">※ 창고(V2) 안에서 이 버튼을 누르면 정확한 기준점이 저장됩니다. 직원 출퇴근은 이 점에서 반경 ${loc.radius_m??25}m 이내만 인정됩니다.</div>
    </div>`;
@@ -239,6 +244,12 @@ async function vLoc(){
       $('#msg').textContent=r.ok?'✓ 기준점이 저장되었습니다. ('+p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6)+')':r.message;
       if(r.ok) setTimeout(vLoc,900);
     }, e=>$('#msg').textContent='위치를 가져올 수 없습니다. GPS를 켜세요.', {enableHighAccuracy:true,timeout:15000});
+  };
+  $('#setCoord').onclick=async()=>{
+    $('#msg').textContent='저장 중…';
+    const r=await rpc('haewoo_set_location',args({p_lat:+$('#mlat').value,p_lng:+$('#mlng').value,p_radius:+$('#rad').value,p_name:'Haewoo 근태 기준 (Hanoi)'}));
+    $('#msg').textContent=r.ok?('✓ 좌표 기준점이 저장되었습니다 ('+(+$('#mlat').value).toFixed(6)+', '+(+$('#mlng').value).toFixed(6)+')'):r.message;
+    if(r.ok) setTimeout(vLoc,900);
   };
 }
 
@@ -382,6 +393,38 @@ function exportPayXlsx(){
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'급여 '+m);
   XLSX.writeFile(wb, '해우비나_급여_'+m+'.xlsx');
 }
+/* 엑셀 대조 (업로드 출퇴근 vs DB 매칭) */
+function vXlcmp(){
+  $('#view').innerHTML=`<div class="bar"><b>엑셀 대조 (출퇴근 매칭)</b>
+    <input type="file" id="xf" accept=".xlsx,.xls,.csv">
+    <span class="muted">열 자동 인식: 사번/이름 · 날짜 · 출근 · 퇴근</span></div>
+    <div id="body" class="muted">엑셀 파일을 선택하면 기존 출퇴근 기록(DB)과 대조합니다.</div>`;
+  $('#xf').onchange=onXlFile;
+}
+function _hm(v){ if(v==null||v==='') return ''; if(typeof v==='number'){ const t=Math.round(v*1440); return String(Math.floor(t/60)%24).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); } const m=String(v).match(/(\d{1,2}):(\d{2})/); return m?m[1].padStart(2,'0')+':'+m[2]:''; }
+function _ymd(v){ if(v==null||v==='') return ''; if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*86400000)); return isNaN(d)?'':d.toISOString().slice(0,10); } const s=String(v).trim().replace(/[.\/]/g,'-'); const m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'); const d=new Date(v); return isNaN(d)?'':d.toISOString().slice(0,10); }
+function _near(a,b){ if(!a||!b) return false; const g=s=>{const[H,M]=s.split(':').map(Number);return H*60+M;}; return Math.abs(g(a)-g(b))<=5; }
+async function onXlFile(e){
+  const f=e.target.files[0]; if(!f) return; $('#body').innerHTML='<span class="muted">분석 중…</span>';
+  let wb; try{ wb=XLSX.read(await f.arrayBuffer(),{type:'array'}); }catch(err){ $('#body').innerHTML='<span class="muted">엑셀을 읽지 못했습니다.</span>'; return; }
+  const arr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:true});
+  if(!arr.length){ $('#body').innerHTML='<span class="muted">데이터가 없습니다.</span>'; return; }
+  const keys=Object.keys(arr[0]); const find=cs=>keys.find(k=>{const x=k.toLowerCase().replace(/\s/g,'');return cs.some(c=>x.includes(c));});
+  const cNo=find(['사번','empno','emp_no','번호']), cNm=find(['이름','성명','name']), cD=find(['날짜','date','일자']), cI=find(['출근','checkin','시작']), cO=find(['퇴근','checkout','종료']);
+  if(!cD||(!cI&&!cO)){ $('#body').innerHTML='<span class="muted">날짜/출근/퇴근 열을 찾지 못했습니다. 헤더(예: 사번, 날짜, 출근, 퇴근)를 확인하세요.</span>'; return; }
+  const recs=arr.map(r=>({no:cNo?String(r[cNo]).trim():'', nm:cNm?String(r[cNm]).trim():'', d:_ymd(r[cD]), xin:cI?_hm(r[cI]):'', xout:cO?_hm(r[cO]):''})).filter(r=>r.d);
+  const dates=[...new Set(recs.map(r=>r.d))]; const db={};
+  for(const d of dates){ const rr=await rpc('haewoo_roster',args({p_date:d})); (rr.rows||[]).forEach(e=>{ const o={in:e.in_ts?new Date(e.in_ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'', out:e.out_ts?new Date(e.out_ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'', name:e.full_name}; db[d+'|'+e.emp_no]=o; db[d+'|n|'+e.full_name]=o; }); }
+  let nM=0,nDf=0,nNo=0;
+  let h='<div class="grp"><table><thead><tr><th>날짜</th><th>사번</th><th>이름</th><th>엑셀 출근</th><th>DB 출근</th><th>엑셀 퇴근</th><th>DB 퇴근</th><th>결과</th></tr></thead><tbody>';
+  for(const r of recs){ const d=r.no?db[r.d+'|'+r.no]:db[r.d+'|n|'+r.nm]; let st,cls;
+    if(!d){ st='DB없음'; cls='out'; nNo++; }
+    else { const ok=(!r.xin||_near(r.xin,d.in))&&(!r.xout||_near(r.xout,d.out)); if(ok){ st='일치'; cls='in'; nM++; } else { st='차이'; cls='no'; nDf++; } }
+    h+=`<tr><td>${r.d}</td><td>${r.no}</td><td>${r.nm||(d&&d.name)||''}</td><td>${r.xin||'-'}</td><td>${d?(d.in||'-'):'-'}</td><td>${r.xout||'-'}</td><td>${d?(d.out||'-'):'-'}</td><td><span class="pill ${cls}">${st}</span></td></tr>`;
+  }
+  $('#body').innerHTML=`<div class="kpis"><div class="kpi"><div class="n">${recs.length}</div><div class="l">엑셀 행</div></div><div class="kpi"><div class="n">${nM}</div><div class="l">일치</div></div><div class="kpi"><div class="n">${nDf}</div><div class="l">차이</div></div><div class="kpi"><div class="n">${nNo}</div><div class="l">DB없음</div></div></div>`+h+'</tbody></table></div>';
+}
+
 /* Master 전용 (Master 권한만) */
 function vMaster(){
   if(CRED.level!=='master'){ $('#view').innerHTML='<div class="muted">권한 없음</div>'; return; }
@@ -416,7 +459,9 @@ const VI={
  '+ 직원 추가':'+ Thêm NV','성별':'Giới tính','전화':'ĐT','관리':'Thao tác','재직':'Đang làm','비활성':'Nghỉ','수정':'Sửa','비활성화':'Vô hiệu','활성화':'Kích hoạt','직원 추가':'Thêm NV','사번':'Mã NV','저장':'Lưu','취소':'Hủy','사번을 입력하세요.':'Vui lòng nhập mã NV.','이름은 필수입니다.':'Tên là bắt buộc.',
  '방문자 질문 누적 (자주 묻는 항목 DB)':'Câu hỏi khách (DB FAQ)','분류':'Phân loại','언어':'N.ngữ','질문':'Câu hỏi','아직 문의가 없습니다.':'Chưa có câu hỏi.','견적':'Báo giá','운송':'Vận chuyển','통관/EDI':'Hải quan/EDI','창고':'Kho','연락처':'Liên hệ','위치':'Vị trí','채용':'Tuyển','인사':'Chào','기타':'Khác',
  '홈페이지 견적 요청 접수':'Yêu cầu báo giá từ web','접수':'Nhận','회사':'Công ty','담당':'Phụ trách','이메일':'Email','구간':'Tuyến','내용':'Nội dung','접수된 견적이 없습니다.':'Chưa có yêu cầu báo giá.',
- '불러오는 중…':'Đang tải…','권한 없음':'Không có quyền','로딩':'Đang tải'
+ '불러오는 중…':'Đang tải…','권한 없음':'Không có quyền',
+ '엑셀 대조 (출퇴근 매칭)':'Đối chiếu Excel','엑셀 행':'Dòng Excel','일치':'Khớp','차이':'Khác','DB없음':'Không có DB','결과':'Kết quả','엑셀 출근':'Excel Vào','DB 출근':'DB Vào','엑셀 퇴근':'Excel Tan','DB 퇴근':'DB Tan',
+ '이 좌표로 고정 저장':'Lưu tọa độ cố định','📍 현재 내 위치로':'📍 Vị trí hiện tại','★ Master 전용':'★ Chỉ Master','권한 체계':'Phân quyền'
 };
 const RXV=[
  [/^(\d+)명$/, m=>m[1]+' người'], [/^(\d+)건$/, m=>m[1]+' mục'],
