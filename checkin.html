@@ -46,8 +46,8 @@ body{font-family:'Noto Sans KR',system-ui,sans-serif;background:linear-gradient(
   </div>
 
   <div class="btns">
-    <button class="b in" id="btnIn" disabled>출근<small>VÀO CA · CHECK-IN</small></button>
-    <button class="b out" id="btnOut" disabled>퇴근<small>TAN CA · CHECK-OUT</small></button>
+    <button class="b in" id="btnIn">출근<small>VÀO CA · CHECK-IN</small></button>
+    <button class="b out" id="btnOut">퇴근<small>TAN CA · CHECK-OUT</small></button>
   </div>
 
   <div class="status" id="status"></div>
@@ -66,8 +66,8 @@ let T = new URLSearchParams(location.search).get('t');
 let LANG = 'vi', EMP = null, busy = false;
 const $ = id => document.getElementById(id);
 const L = {
-  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m', locask:'Đang kiểm tra vị trí… Hãy cho phép truy cập vị trí.', locok:'Đã xác định vị trí. Có thể chấm công.', locneed:'Cần CHO PHÉP vị trí (GPS) mới chấm công được. Nhấn để thử lại.', needlogin:'Cần đăng nhập. <a href="login.html">Đăng nhập</a>', notreg:'Tài khoản chưa được đăng ký. Hãy liên hệ quản trị viên.' },
-  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m', locask:'위치 확인 중… 위치 접근을 허용해 주세요.', locok:'위치 확인됨. 출퇴근 가능합니다.', locneed:'위치(GPS) 권한을 허용해야 출퇴근이 됩니다. 눌러서 다시 시도.', needlogin:'로그인이 필요합니다. <a href="login.html">로그인</a>', notreg:'등록되지 않은 계정입니다. 관리자에게 등록을 요청하세요.' }
+  vi:{ in:'VÀO CA', out:'TAN CA', wait:'Đang định vị…', need:'Không lấy được vị trí. Hãy bật GPS.', noqr:'QR không hợp lệ.', team:'Tổ', role:'Vị trí', last:'Gần nhất', okin:'Đã chấm công VÀO', okout:'Đã chấm công RA', dist:'cách', m:'m', locask:'Đang kiểm tra vị trí… Hãy cho phép truy cập vị trí.', locok:'Đã xác định vị trí. Có thể chấm công.', locneed:'Nhấn VÀO CA/TAN CA để xác định vị trí — chỉ ghi nhận trong bán kính 25m.', needlogin:'Cần đăng nhập. <a href="login.html">Đăng nhập</a>', notreg:'Tài khoản chưa được đăng ký. Hãy liên hệ quản trị viên.' },
+  ko:{ in:'출근', out:'퇴근', wait:'위치 측정 중…', need:'위치를 가져올 수 없습니다. GPS를 켜세요.', noqr:'유효하지 않은 QR입니다.', team:'조', role:'업무', last:'최근', okin:'출근 처리되었습니다', okout:'퇴근 처리되었습니다', dist:'거리', m:'m', locask:'위치 확인 중… 위치 접근을 허용해 주세요.', locok:'위치 확인됨. 출퇴근 가능합니다.', locneed:'출근/퇴근을 누르면 위치를 확인합니다 — 25m 이내에서만 기록됩니다.', needlogin:'로그인이 필요합니다. <a href="login.html">로그인</a>', notreg:'등록되지 않은 계정입니다. 관리자에게 등록을 요청하세요.' }
 };
 const ROLE = { Leader:'조장 / Leader', System:'시스템 / System', Forklift:'지게차 / Forklift', InOut:'입출고 / In-Out', Manager:'매니저', HR:'HR' };
 
@@ -121,12 +121,12 @@ function getPos(){
   return new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(
     p=>res(p), e=>rej(e), {enableHighAccuracy:true, timeout:15000, maximumAge:0}));
 }
-// 접속 시 위치 권한 요청. 허용해야 버튼 활성화(출/퇴근 가능)
+// 접속 시 위치 권한을 미리 요청(보조 안내). 버튼은 항상 활성 — 누를 때 위치를 측정해 25m 판정.
 function askLocation(){
   showStatus('info', L[LANG].locask);
   navigator.geolocation.getCurrentPosition(
-    p=>{ $('btnIn').disabled=false; $('btnOut').disabled=false; showStatus('ok', L[LANG].locok); },
-    e=>{ $('btnIn').disabled=true; $('btnOut').disabled=true; const s=$('status'); s.className='status err'; s.textContent=L[LANG].locneed; s.style.display='block'; s.style.cursor='pointer'; s.onclick=askLocation; },
+    p=>{ showStatus('ok', L[LANG].locok); },
+    e=>{ const s=$('status'); s.className='status info'; s.textContent=L[LANG].locneed; s.style.display='block'; },
     {enableHighAccuracy:true, timeout:15000, maximumAge:0});
 }
 async function punch(kind){

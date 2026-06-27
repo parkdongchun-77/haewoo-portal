@@ -350,11 +350,16 @@ async function loadEmp(){
   for(const e of rows){
     h+=`<tr${e.active?'':' style="opacity:.5"'}><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${e.gender||''}</td><td class="muted" style="font-size:12px">${e.email||''}</td><td>${e.phone||''}</td>
       <td>${e.active?'<span class="pill in">재직</span>':'<span class="pill no">비활성</span>'}</td>
-      <td><button class="ebtn" data-edit='${JSON.stringify(e).replace(/'/g,"&#39;")}'>수정</button> <button class="ebtn" data-act="${e.emp_no}" data-on="${e.active?1:0}">${e.active?'비활성화':'활성화'}</button></td></tr>`;
+      <td><button class="ebtn" data-edit='${JSON.stringify(e).replace(/'/g,"&#39;")}'>수정</button> <button class="ebtn" data-del="${e.emp_no}" data-nm="${(e.full_name||'').replace(/"/g,'&quot;')}">삭제</button></td></tr>`;
   }
   $('#body').innerHTML=h+'</tbody></table></div>';
   $$('.ebtn[data-edit]').forEach(b=>b.onclick=()=>empForm(JSON.parse(b.dataset.edit)));
-  $$('.ebtn[data-act]').forEach(b=>b.onclick=async()=>{ await rpc('haewoo_employee_set_active',args({p_emp_no:+b.dataset.act,p_active:b.dataset.on==='0'})); loadEmp(); });
+  $$('.ebtn[data-del]').forEach(b=>b.onclick=async()=>{
+    if(!confirm(`${b.dataset.nm} 직원을 삭제할까요?\n목록에서 제거되고, 출퇴근 기록은 보관 DB로 이동합니다.`)) return;
+    const r=await rpc('haewoo_employee_delete',args({p_emp_no:+b.dataset.del}));
+    if(!r.ok){ alert(r.message||'삭제 실패'); return; }
+    loadEmp();
+  });
 }
 function empForm(e){
   const teams=['지원','G1','G2','G3'], roles=['Leader','System','Forklift','InOut','Manager','HR'];
