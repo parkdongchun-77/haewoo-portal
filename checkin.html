@@ -113,7 +113,7 @@ async function load(){
     EMP=r;
     if(!EMP.phone) $('phoneBox').style.display='block';
     render();
-    askLocation();   // 접속 시 위치 권한 요청 — 허용해야 출/퇴근 가능
+    if(EMP.method!=='qr') askLocation();   // GPS 사업장만 위치 권한 미리 요청 (QR 사업장은 위치 불필요)
   }catch(e){ showStatus('err','연결 오류: '+e.message); }
 }
 
@@ -135,12 +135,15 @@ async function punch(kind){
   const label = btn.innerHTML; btn.innerHTML='<span class="spin"></span>';
   showStatus('info', L[LANG].wait);
   try{
-    const p = await getPos();
+    // QR 사업장(하노이)은 위치 없이 기록, GPS 사업장(박닌)은 위치 측정해 25m 판정
+    let lat=null,lng=null;
+    if(EMP.method!=='qr'){ const p = await getPos(); lat=p.coords.latitude; lng=p.coords.longitude; }
     const phone = $('phone') ? $('phone').value.trim() : '';
-    const r = await rpc('haewoo_checkin',{p_token:T,p_kind:kind,p_lat:p.coords.latitude,p_lng:p.coords.longitude,p_phone:phone||null});
+    const r = await rpc('haewoo_checkin',{p_token:T,p_kind:kind,p_lat:lat,p_lng:lng,p_phone:phone||null});
     if(r.ok){
       $('phoneBox').style.display='none';
-      showStatus('ok', `✓ ${kind==='in'?L[LANG].okin:L[LANG].okout} · ${L[LANG].dist} ${r.distance_m}${L[LANG].m}<br>${new Date(r.ts).toLocaleString(LANG==='vi'?'vi-VN':'ko-KR')}`);
+      const distTxt = (r.distance_m!=null) ? ` · ${L[LANG].dist} ${r.distance_m}${L[LANG].m}` : '';
+      showStatus('ok', `✓ ${kind==='in'?L[LANG].okin:L[LANG].okout}${distTxt}<br>${new Date(r.ts).toLocaleString(LANG==='vi'?'vi-VN':'ko-KR')}`);
     } else {
       showStatus('err', r.message || 'Lỗi');
     }

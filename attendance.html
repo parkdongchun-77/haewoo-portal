@@ -81,7 +81,7 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
     <div class="sp"><span class="langs"><b class="langb on" data-l="ko">KO</b> · <b class="langb" data-l="vi">VI</b></span><span class="muted" id="whoami"></span><a class="home" href="portal.html">시스템</a><button class="lo" id="logout">로그아웃</button></div>
   </div>
   <div class="tabs">
-    <div class="tab on" data-v="today">오늘 현황</div>
+    <div class="tab on" data-v="today">근태 현황</div>
     <div class="tab" data-v="log">출퇴근 이력</div>
     <div class="tab" data-v="shift">3교대 / 조 편성</div>
     <div class="tab" data-v="rota">회전표</div>
@@ -105,6 +105,9 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let CRED=null; try{CRED=JSON.parse(sessionStorage.getItem('hw_admin')||'null')}catch(e){}
 const TEAM_ORDER=['지원','G1','G2','G3'], ROLE_ORDER=['Leader','System','Forklift','InOut','Manager','HR'];
+let SITE='박닌';  // 사업장 선택(하노이/박닌)
+function siteToggle(){ return '<span style="display:inline-flex;gap:6px;margin-left:8px">'+['박닌','하노이'].map(s=>`<button class="sitebtn" data-site="${s}" style="padding:5px 12px;border-radius:8px;border:1px solid #e4e8ee;cursor:pointer;${SITE===s?'background:#14233f;color:#fff;border-color:#14233f':'background:#fff;color:#33415a'}">${s}</button>`).join('')+'</span>'; }
+function bindSite(reload){ $$('.sitebtn').forEach(b=>b.onclick=()=>{ SITE=b.dataset.site; reload(); }); }
 const ROLE_KO={Leader:'조장',System:'시스템',Forklift:'지게차',InOut:'입출고',Manager:'매니저',HR:'HR'};
 const today=()=> new Date().toISOString().slice(0,10);
 const hm=ts=> ts? new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
@@ -139,14 +142,15 @@ function shiftPill(s){ const x={M:['주간','sM'],A:['오후','sA'],N:['야간',
 const curMonth=()=> new Date().toISOString().slice(0,7);
 
 async function vToday(){
-  $('#view').innerHTML=`<div class="bar"><b>오늘 현황</b><input type="date" id="d" value="${today()}"><span class="muted">조별 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>`;
+  $('#view').innerHTML=`<div class="bar"><b>근태 현황</b><input type="date" id="d" value="${today()}">${siteToggle()}<span class="muted">조별 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>`;
   $('#d').onchange=()=>loadToday($('#d').value);
+  bindSite(()=>loadToday($('#d').value));
   loadToday(today());
 }
 async function loadToday(d){
   const r=await rpc('haewoo_roster',args({p_date:d}));
   if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
-  const rows=r.rows||[]; const inN=rows.filter(x=>x.in_ts).length, outN=rows.filter(x=>x.out_ts).length, working=rows.filter(x=>x.in_ts&&!x.out_ts).length;
+  const rows=(r.rows||[]).filter(x=>x.site===SITE); const inN=rows.filter(x=>x.in_ts).length, outN=rows.filter(x=>x.out_ts).length, working=rows.filter(x=>x.in_ts&&!x.out_ts).length;
   let h=`<div class="kpis">
     <div class="kpi"><div class="n">${rows.length}</div><div class="l">총원</div></div>
     <div class="kpi"><div class="n">${inN}</div><div class="l">출근</div></div>
@@ -226,12 +230,13 @@ async function vShift(){
 }
 
 async function vQR(){
-  $('#view').innerHTML='<div class="bar"><b>직원 QR 발급</b><span class="muted">각 직원이 본인 QR을 휴대폰에서 열어 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>';
+  $('#view').innerHTML='<div class="bar"><b>직원 QR 발급</b>'+siteToggle()+'<span class="muted">각 직원이 본인 QR을 휴대폰에서 열어 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>';
+  bindSite(vQR);
   const r=await rpc('haewoo_qr_list',args());
   if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
   const base=location.origin+location.pathname.replace(/attendance\.html$/,'')+'checkin.html?t=';
   $('#body').innerHTML='<div class="qrgrid" id="qg"></div>';
-  for(const e of r.rows){
+  for(const e of r.rows.filter(e=>e.site===SITE)){
     const url=base+e.token;
     const c=document.createElement('div'); c.className='qc';
     c.innerHTML=`<div class="nm">${e.full_name}</div><div class="mt">${e.team} · ${ROLE_KO[e.role]||e.role} · #${e.emp_no}</div><div class="qimg"></div><button data-u="${url}">링크 복사</button>`;
@@ -242,34 +247,47 @@ async function vQR(){
 }
 
 async function vLoc(){
-  let loc={}; try{ const r=await fetch(`${SB_URL}/rest/v1/haewoo_work_location?id=eq.1&select=*`,{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}}); loc=(await r.json())[0]||{}; }catch(e){}
-  $('#view').innerHTML=`<div class="bar"><b>기준 위치 · GPS 25m</b></div>
-   <div class="note">
-     <div>현재 기준점: <b>${loc.name||'-'}</b></div>
-     <div class="muted">위도 ${loc.lat??'-'} · 경도 ${loc.lng??'-'} · 반경 ${loc.radius_m??25}m</div>
-     <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-       <span>반경(m)</span><input type="number" id="rad" value="${loc.radius_m??25}" min="5" max="500" style="width:80px">
-       <span>위도</span><input type="number" id="mlat" step="0.000001" value="${loc.lat??21.204250}" style="width:130px">
-       <span>경도</span><input type="number" id="mlng" step="0.000001" value="${loc.lng??105.988889}" style="width:130px">
-       <button id="setCoord">이 좌표로 고정 저장</button>
-       <button id="setHere" style="background:#f0f2f6;color:#33415a">📍 현재 내 위치로</button></div>
-     <div id="msg" class="muted"></div>
-     <div class="muted" style="margin-top:10px">※ 창고(V2) 안에서 이 버튼을 누르면 정확한 기준점이 저장됩니다. 직원 출퇴근은 이 점에서 반경 ${loc.radius_m??25}m 이내만 인정됩니다.</div>
-   </div>`;
-  $('#setHere').onclick=()=>{
-    $('#msg').textContent='위치 측정 중…';
-    navigator.geolocation.getCurrentPosition(async p=>{
-      const r=await rpc('haewoo_set_location',args({p_lat:p.coords.latitude,p_lng:p.coords.longitude,p_radius:+$('#rad').value,p_name:'V2 Warehouse (Samsung Display Vietnam)'}));
-      $('#msg').textContent=r.ok?'✓ 기준점이 저장되었습니다. ('+p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6)+')':r.message;
+  const rr=await rpc('haewoo_site_locations',args());
+  const list=(rr&&rr.rows)||[];
+  const cur=list.find(x=>x.site===SITE)||{site:SITE,method:SITE==='하노이'?'qr':'gps'};
+  let body;
+  if(cur.method==='qr'){
+    body=`<div class="note">
+       <div><b>${SITE}</b> · 출퇴근 방식: <b>QR 코드</b></div>
+       <div class="muted" style="margin-top:8px">이 사업장은 <b>QR 스캔</b>으로 출퇴근합니다. 위치(GPS) 좌표·반경 설정이 필요 없습니다. 직원 QR은 <b>QR 발급</b> 탭에서 받아 현장에 게시하세요.</div>
+     </div>`;
+  } else {
+    body=`<div class="note">
+       <div>현재 기준점: <b>${cur.name||'-'}</b> (${SITE} · GPS)</div>
+       <div class="muted">위도 ${cur.lat??'-'} · 경도 ${cur.lng??'-'} · 반경 ${cur.radius_m??25}m</div>
+       <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+         <span>반경(m)</span><input type="number" id="rad" value="${cur.radius_m??25}" min="5" max="500" style="width:80px">
+         <span>위도</span><input type="number" id="mlat" step="0.000001" value="${cur.lat??21.0159}" style="width:130px">
+         <span>경도</span><input type="number" id="mlng" step="0.000001" value="${cur.lng??105.8927}" style="width:130px">
+         <button id="setCoord">이 좌표로 고정 저장</button>
+         <button id="setHere" style="background:#f0f2f6;color:#33415a">📍 현재 내 위치로</button></div>
+       <div id="msg" class="muted"></div>
+       <div class="muted" style="margin-top:10px">※ 직원 출퇴근은 이 점에서 반경 ${cur.radius_m??25}m 이내만 인정됩니다.</div>
+     </div>`;
+  }
+  $('#view').innerHTML=`<div class="bar"><b>기준 위치 · 사업장별</b>${siteToggle()}</div>`+body;
+  bindSite(vLoc);
+  if(cur.method!=='qr'){
+    $('#setHere').onclick=()=>{
+      $('#msg').textContent='위치 측정 중…';
+      navigator.geolocation.getCurrentPosition(async p=>{
+        const r=await rpc('haewoo_set_site_location',args({p_site:SITE,p_method:'gps',p_lat:p.coords.latitude,p_lng:p.coords.longitude,p_radius:+$('#rad').value,p_name:SITE+' 사업장'}));
+        $('#msg').textContent=r.ok?'✓ 기준점이 저장되었습니다. ('+p.coords.latitude.toFixed(6)+', '+p.coords.longitude.toFixed(6)+')':r.message;
+        if(r.ok) setTimeout(vLoc,900);
+      }, e=>$('#msg').textContent='위치를 가져올 수 없습니다. GPS를 켜세요.', {enableHighAccuracy:true,timeout:15000});
+    };
+    $('#setCoord').onclick=async()=>{
+      $('#msg').textContent='저장 중…';
+      const r=await rpc('haewoo_set_site_location',args({p_site:SITE,p_method:'gps',p_lat:+$('#mlat').value,p_lng:+$('#mlng').value,p_radius:+$('#rad').value,p_name:SITE+' 사업장'}));
+      $('#msg').textContent=r.ok?('✓ 좌표 기준점이 저장되었습니다 ('+(+$('#mlat').value).toFixed(6)+', '+(+$('#mlng').value).toFixed(6)+')'):r.message;
       if(r.ok) setTimeout(vLoc,900);
-    }, e=>$('#msg').textContent='위치를 가져올 수 없습니다. GPS를 켜세요.', {enableHighAccuracy:true,timeout:15000});
-  };
-  $('#setCoord').onclick=async()=>{
-    $('#msg').textContent='저장 중…';
-    const r=await rpc('haewoo_set_location',args({p_lat:+$('#mlat').value,p_lng:+$('#mlng').value,p_radius:+$('#rad').value,p_name:'Haewoo 근태 기준 (Hanoi)'}));
-    $('#msg').textContent=r.ok?('✓ 좌표 기준점이 저장되었습니다 ('+(+$('#mlat').value).toFixed(6)+', '+(+$('#mlng').value).toFixed(6)+')'):r.message;
-    if(r.ok) setTimeout(vLoc,900);
-  };
+    };
+  }
 }
 
 async function vBot(){
@@ -322,18 +340,19 @@ function renderRota(m){
 let PAY_DATA=[];
 async function vPay(){
   const m=curMonth();
-  $('#view').innerHTML=`<div class="bar"><b>급여 계산 (실제 출퇴근 기준)</b><input type="month" id="pm" value="${m}">
+  $('#view').innerHTML=`<div class="bar"><b>급여 계산 (실제 출퇴근 기준)</b><input type="month" id="pm" value="${m}">${siteToggle()}
     <span class="muted">시급</span><input type="number" id="rate" value="30000" min="0" step="1000" style="width:100px"><span class="muted">₫ · OT +50% · 야간 +30%</span>
     <button id="xlsx" style="margin-left:auto;background:#1f8a54;color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:700;cursor:pointer">⬇ 엑셀 다운로드</button></div>
     <div id="body" class="muted">불러오는 중…</div>`;
   $('#pm').onchange=loadPay; $('#rate').oninput=()=>renderPay(+$('#rate').value||0);
   $('#xlsx').onclick=exportPayXlsx;
+  bindSite(loadPay);
   loadPay();
 }
 async function loadPay(){
   const r=await rpc('haewoo_payroll_month',args({p_month:$('#pm').value}));
   if(!r.ok){ $('#body').innerHTML='<span class="muted">'+(r.message||'오류')+'</span>'; return; }
-  PAY_DATA=r.rows||[];
+  PAY_DATA=(r.rows||[]).filter(e=>e.site===SITE);
   renderPay(+$('#rate').value||0);
 }
 function renderPay(rate){
@@ -356,16 +375,17 @@ function renderPay(rate){
 }
 /* 직원 관리 */
 async function vEmp(){
-  $('#view').innerHTML=`<div class="bar"><b>직원 관리</b><button id="addEmp" style="margin-left:auto;background:var(--navy);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:700;cursor:pointer">+ 직원 추가</button></div>
+  $('#view').innerHTML=`<div class="bar"><b>직원 관리</b>${siteToggle()}<button id="addEmp" style="margin-left:auto;background:var(--navy);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:700;cursor:pointer">+ 직원 추가</button></div>
    <div id="empForm"></div><div id="body" class="muted">불러오는 중…</div>`;
   $('#addEmp').onclick=()=>empForm({});
+  bindSite(loadEmp);
   loadEmp();
 }
 async function loadEmp(){
   const r=await rpc('haewoo_employee_all',args());
   if(!r.ok){ $('#body').innerHTML='<span class="muted">'+(r.message||'오류')+'</span>'; return; }
-  const rows=r.rows||[];
-  let h='<div class="grp"><h3><span>전체 직원 ('+rows.length+')</span></h3><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>성별</th><th>이메일</th><th>전화</th><th>상태</th><th>관리</th></tr></thead><tbody>';
+  const rows=(r.rows||[]).filter(e=>e.site===SITE);
+  let h='<div class="grp"><h3><span>'+SITE+' 직원 ('+rows.length+')</span></h3><table><thead><tr><th>#</th><th>이름</th><th>조</th><th>업무</th><th>성별</th><th>이메일</th><th>전화</th><th>상태</th><th>관리</th></tr></thead><tbody>';
   for(const e of rows){
     h+=`<tr${e.active?'':' style="opacity:.5"'}><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${e.gender||''}</td><td class="muted" style="font-size:12px">${e.email||''}</td><td>${e.phone||''}</td>
       <td>${e.active?'<span class="pill in">재직</span>':'<span class="pill no">비활성</span>'}</td>
@@ -389,13 +409,14 @@ function empForm(e){
    <span>조</span><select id="f_tm">${teams.map(t=>`<option ${e.team===t?'selected':''}>${t}</option>`).join('')}</select>
    <span>업무</span><select id="f_rl">${roles.map(r=>`<option value="${r}" ${e.role===r?'selected':''}>${ROLE_KO[r]||r}</option>`).join('')}</select>
    <span>성별</span><select id="f_g"><option ${e.gender==='M'?'selected':''}>M</option><option ${e.gender==='F'?'selected':''}>F</option></select>
+   <span>사업장</span><select id="f_st"><option ${(e.site||SITE)==='박닌'?'selected':''}>박닌</option><option ${(e.site||SITE)==='하노이'?'selected':''}>하노이</option></select>
    <span>이메일</span><input id="f_em" value="${e.email||''}" placeholder="소셜 로그인 매칭용" style="width:220px">
    <button id="f_save">저장</button><button id="f_cancel" style="background:#f0f2f6;color:#33415a">취소</button></div>
    <div id="f_msg" class="muted" style="margin-top:8px"></div></div>`;
   $('#f_cancel').onclick=()=>$('#empForm').innerHTML='';
   $('#f_save').onclick=async()=>{
     if(!$('#f_no').value){ $('#f_msg').textContent='사번을 입력하세요.'; return; }
-    const r=await rpc('haewoo_employee_upsert',args({p_emp_no:+$('#f_no').value,p_full_name:$('#f_nm').value.trim(),p_team:$('#f_tm').value,p_role:$('#f_rl').value,p_gender:$('#f_g').value,p_email:$('#f_em').value.trim()}));
+    const r=await rpc('haewoo_employee_upsert',args({p_emp_no:+$('#f_no').value,p_full_name:$('#f_nm').value.trim(),p_team:$('#f_tm').value,p_role:$('#f_rl').value,p_gender:$('#f_g').value,p_email:$('#f_em').value.trim(),p_site:$('#f_st').value}));
     if(r.ok){ $('#empForm').innerHTML=''; loadEmp(); } else $('#f_msg').textContent=r.message||'오류';
   };
 }
