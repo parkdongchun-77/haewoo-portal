@@ -103,7 +103,7 @@ async function adminLogin(e){
   try{
     const r=await rpc('haewoo_admin_login',{p_username:u,p_passcode:p});
     if(!r.ok){ note(r.message||'아이디 또는 비밀번호가 올바르지 않습니다.'); return false; }
-    sessionStorage.setItem('hw_admin', JSON.stringify({u,p,name:r.name,level:r.level}));
+    sessionStorage.setItem('hw_admin', JSON.stringify({u,p,name:r.name,level:r.level,emp_no:r.emp_no}));
     location.href='attendance.html';
   }catch(err){ note('연결 오류: '+err.message); }
   return false;

@@ -114,7 +114,7 @@ async function login(){
   try{
     const r=await rpc('haewoo_admin_login',{p_username:u,p_passcode:p});
     if(!r.ok){ $('#lerr').textContent=r.message; $('#lerr').style.display='block'; return; }
-    CRED={u,p,name:r.name,level:r.level}; sessionStorage.setItem('hw_admin',JSON.stringify(CRED));
+    CRED={u,p,name:r.name,level:r.level,emp_no:r.emp_no}; sessionStorage.setItem('hw_admin',JSON.stringify(CRED));
     boot();
   }catch(e){ $('#lerr').textContent='연결 오류: '+e.message; $('#lerr').style.display='block'; }
 }
@@ -159,11 +159,30 @@ async function loadToday(d){
       <table><thead><tr><th>#</th><th>이름</th><th>업무</th><th>출근</th><th>퇴근</th><th>상태</th></tr></thead><tbody>`;
     for(const e of g){
       const st = e.in_ts&&e.out_ts? '<span class="pill out">퇴근</span>' : e.in_ts? '<span class="pill in">근무중</span>' : '<span class="pill no">미출근</span>';
-      h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${hm(e.in_ts)}</td><td>${hm(e.out_ts)}</td><td>${st}</td></tr>`;
+      const me = CRED.emp_no && e.emp_no===CRED.emp_no;
+      let cin, cout;
+      if(me){
+        // 본인 행: 출근은 1회(찍으면 시간 표시·잠금), 퇴근은 출근 후에만(여러번 가능, 마지막 시간 표시)
+        cin = e.in_ts ? `${hm(e.in_ts)} <span class="muted">🔒</span>`
+                      : `<button class="ebtn" data-pk="in" style="background:#1f8a54;color:#fff;border-color:#1f8a54">출근</button>`;
+        cout = e.in_ts ? `<button class="ebtn" data-pk="out" style="background:#c0492f;color:#fff;border-color:#c0492f">퇴근</button>${e.out_ts?' '+hm(e.out_ts):''}`
+                       : `<span class="muted">출근 후</span>`;
+      } else { cin=hm(e.in_ts); cout=hm(e.out_ts); }
+      h+=`<tr${me?' style="background:#fff7e6"':''}><td>${e.emp_no}</td><td>${e.full_name}${me?' <span class="pill in">나</span>':''}</td><td class="role">${ROLE_KO[e.role]||e.role}</td><td>${cin}</td><td>${cout}</td><td>${st}</td></tr>`;
     }
     h+='</tbody></table></div>';
   }
   $('#body').innerHTML=h;
+  // 본인 행 출퇴근 버튼: 위치 측정 → 규칙 검증(서버) → 새로고침
+  $$('.ebtn[data-pk]').forEach(b=>b.onclick=async()=>{
+    b.disabled=true; const k=b.dataset.pk;
+    try{
+      const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:true,timeout:15000,maximumAge:0}));
+      const r=await rpc('haewoo_self_punch',args({p_kind:k,p_lat:pos.coords.latitude,p_lng:pos.coords.longitude}));
+      if(!r.ok){ alert(r.message||'처리 실패'); b.disabled=false; return; }
+      loadToday(d);
+    }catch(e){ alert(e&&e.code? '위치를 가져올 수 없습니다. GPS/위치 권한을 확인하세요.' : ('오류: '+(e.message||e))); b.disabled=false; }
+  });
 }
 
 async function vLog(){
