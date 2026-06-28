@@ -106,7 +106,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let CRED=null; try{CRED=JSON.parse(sessionStorage.getItem('hw_admin')||'null')}catch(e){}
 const TEAM_ORDER=['지원','G1','G2','G3'], ROLE_ORDER=['Leader','System','Forklift','InOut','Manager','HR'];
 let SITE='박닌';  // 사업장 선택(하노이/박닌)
-function siteToggle(){ return '<span style="display:inline-flex;gap:6px;margin-left:8px">'+['하노이','박닌'].map(s=>`<button class="sitebtn" data-site="${s}" style="padding:5px 12px;border-radius:8px;border:1px solid #e4e8ee;cursor:pointer;${SITE===s?'background:#14233f;color:#fff;border-color:#14233f':'background:#fff;color:#33415a'}">${s}</button>`).join('')+'</span>'; }
+function siteToggle(){ return '<span style="display:inline-flex;gap:8px;margin-left:10px">'+['하노이','박닌'].map(s=>`<button class="sitebtn" data-site="${s}" style="padding:9px 22px;border-radius:11px;font-size:16px;font-weight:700;border:1px solid #d6dbe4;cursor:pointer;${SITE===s?'background:#14233f;color:#fff;border-color:#14233f;box-shadow:0 3px 10px rgba(20,35,63,.18)':'background:#fff;color:#33415a'}">${s}</button>`).join('')+'</span>'; }
 function bindSite(reload){ $$('.sitebtn').forEach(b=>b.onclick=()=>{ SITE=b.dataset.site; reload(); }); }
 const ROLE_KO={Leader:'조장',System:'시스템',Forklift:'지게차',InOut:'입출고',Manager:'매니저',HR:'HR'};
 const today=()=> new Date().toISOString().slice(0,10);
@@ -142,7 +142,7 @@ function shiftPill(s){ const x={M:['주간','sM'],A:['오후','sA'],N:['야간',
 const curMonth=()=> new Date().toISOString().slice(0,7);
 
 async function vToday(){
-  $('#view').innerHTML=`<div class="bar"><b>근태 현황</b><input type="date" id="d" value="${today()}">${siteToggle()}<span class="muted">조별 출퇴근</span></div><div id="body" class="muted">불러오는 중…</div>`;
+  $('#view').innerHTML=`<div class="bar"><b>근태 현황</b><input type="date" id="d" value="${today()}">${siteToggle()}</div><div id="body" class="muted">불러오는 중…</div>`;
   $('#d').onchange=()=>loadToday($('#d').value);
   bindSite(()=>loadToday($('#d').value));
   loadToday(today());
