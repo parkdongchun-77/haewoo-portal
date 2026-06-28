@@ -19,7 +19,7 @@ insert into haewoo_site_location(site,method,name,lat,lng,radius_m)
          coalesce((select radius_m from haewoo_work_location where id=1),25)
   on conflict (site) do nothing;
 insert into haewoo_site_location(site,method,name,radius_m)
-  values('하노이','qr','하노이 사업장 (QR)',25)
+  values('하노이','gps','하노이 사업장',25)
   on conflict (site) do nothing;
 
 -- 3) 사업장 설정 조회/저장

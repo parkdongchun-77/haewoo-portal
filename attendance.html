@@ -249,7 +249,7 @@ async function vQR(){
 async function vLoc(){
   const rr=await rpc('haewoo_site_locations',args());
   const list=(rr&&rr.rows)||[];
-  const cur=list.find(x=>x.site===SITE)||{site:SITE,method:SITE==='하노이'?'qr':'gps'};
+  const cur=list.find(x=>x.site===SITE)||{site:SITE,method:'gps'};
   let body;
   if(cur.method==='qr'){
     body=`<div class="note">
