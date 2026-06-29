@@ -189,21 +189,65 @@ async function loadToday(d){
   });
 }
 
-async function vLog(){
-  $('#view').innerHTML=`<div class="bar"><b>출퇴근 이력</b><input type="date" id="d" value="${today()}"></div><div id="body" class="muted">불러오는 중…</div>`;
-  $('#d').onchange=()=>loadLog($('#d').value); loadLog(today());
+let LOG_DATA=[];  // 출퇴근 이력 (엑셀 내보내기용)
+// 기준일·모드(일/주/월/년)로 조회 기간[from,to] 계산 (로컬 날짜)
+function logRange(mode,dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  let from=new Date(d), to=new Date(d);
+  if(mode==='week'){ const dow=(d.getDay()+6)%7; from.setDate(d.getDate()-dow); to=new Date(from); to.setDate(from.getDate()+6); }
+  else if(mode==='month'){ from=new Date(d.getFullYear(),d.getMonth(),1); to=new Date(d.getFullYear(),d.getMonth()+1,0); }
+  else if(mode==='year'){ from=new Date(d.getFullYear(),0,1); to=new Date(d.getFullYear(),11,31); }
+  const f=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+  return [f(from),f(to)];
 }
-async function loadLog(d){
-  const r=await rpc('haewoo_attendance_log',args({p_date:d}));
-  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+r.message+'</span>'; return; }
-  const rows=r.rows||[];
-  if(!rows.length){ $('#body').innerHTML='<div class="grp"><h3><span>'+d+'</span></h3><table><tbody><tr><td class="muted" style="padding:18px">기록 없음</td></tr></tbody></table></div>'; return; }
-  let h=`<div class="grp"><h3><span>${d} · ${rows.length}건</span></h3><table><thead><tr><th>시간</th><th>#</th><th>이름</th><th>조</th><th>구분</th><th>거리</th></tr></thead><tbody>`;
+async function vLog(){
+  $('#view').innerHTML=`<div class="bar"><b>출퇴근 이력</b>
+    <select id="lmode"><option value="day">일간</option><option value="week">주간</option><option value="month">월간</option><option value="year">년간</option><option value="range">기간 지정</option></select>
+    <input type="date" id="d" value="${today()}">
+    <span id="lto" class="muted" style="display:none">~</span><input type="date" id="d2" value="${today()}" style="display:none">
+    <input id="lq" placeholder="이름/사번 검색" style="padding:8px 11px;border:1px solid #e4e8ee;border-radius:8px;font-size:13px">
+    ${siteToggle()}
+    <button id="lxlsx" style="margin-left:auto;background:#1f8a54;color:#fff;border:0;border-radius:9px;padding:9px 14px;font-weight:700;cursor:pointer">⬇ 엑셀 다운로드</button>
+    </div><div id="body" class="muted">불러오는 중…</div>`;
+  $('#lmode').onchange=()=>{ const rg=$('#lmode').value==='range'; $('#d2').style.display=rg?'':'none'; $('#lto').style.display=rg?'':'none'; loadLog(); };
+  $('#d').onchange=loadLog; $('#d2').onchange=loadLog; $('#lq').oninput=renderLog;
+  bindSite(loadLog); $('#lxlsx').onclick=exportLogXlsx;
+  loadLog();
+}
+async function loadLog(){
+  const mode=$('#lmode').value;
+  let from,to;
+  if(mode==='range'){ from=$('#d').value; to=$('#d2').value; if(to<from){ const t=from; from=to; to=t; } }
+  else { [from,to]=logRange(mode,$('#d').value); }
+  const r=await rpc('haewoo_attendance_range',args({p_from:from,p_to:to}));
+  if(!r.ok){ $('#body').innerHTML='<span class="muted">'+(r.message||'오류')+'</span>'; return; }
+  LOG_DATA=(r.rows||[]).filter(e=>e.site===SITE);
+  renderLog();
+}
+function logFiltered(){
+  const q=($('#lq')?$('#lq').value:'').trim().toLowerCase();
+  return LOG_DATA.filter(e=> !q || (e.full_name||'').toLowerCase().includes(q) || String(e.emp_no).includes(q));
+}
+function renderLog(){
+  const rows=logFiltered();
+  const fmt=t=>t?new Date(t).toLocaleString('ko-KR'):'—';
+  let h=`<div class="grp"><h3><span>${SITE} · ${rows.length}건</span></h3><table><thead><tr><th>사번</th><th>이름</th><th>조</th><th>날짜</th><th>출근</th><th>퇴근</th></tr></thead><tbody>`;
+  if(!rows.length) h+='<tr><td class="muted" colspan="6" style="padding:18px">기록 없음</td></tr>';
   for(const e of rows){
-    h+=`<tr><td>${new Date(e.ts).toLocaleString('ko-KR')}</td><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td>
-      <td>${e.kind==='in'?'<span class="pill in">출근</span>':'<span class="pill out">퇴근</span>'}</td><td>${e.distance_m??''}m</td></tr>`;
+    h+=`<tr><td>${e.emp_no}</td><td>${e.full_name}</td><td>${e.team}</td><td>${e.work_date}</td><td>${fmt(e.in_ts)}</td><td>${fmt(e.out_ts)}</td></tr>`;
   }
   $('#body').innerHTML=h+'</tbody></table></div>';
+}
+function exportLogXlsx(){
+  if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도하세요.'); return; }
+  const rows=logFiltered();
+  if(!rows.length){ alert('데이터가 없습니다.'); return; }
+  const fmt=t=>t?new Date(t).toLocaleString('ko-KR'):'';
+  const aoa=[['해우비나 출퇴근 이력 ('+SITE+')'],[],['사번','이름','조','날짜','출근','퇴근']];
+  for(const e of rows) aoa.push([e.emp_no,e.full_name,e.team,e.work_date,fmt(e.in_ts),fmt(e.out_ts)]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:10},{wch:20},{wch:8},{wch:12},{wch:22},{wch:22}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'출퇴근 이력');
+  XLSX.writeFile(wb,'해우비나_출퇴근이력_'+SITE+'_'+$('#d').value+'.xlsx');
 }
 
 async function vShift(){
