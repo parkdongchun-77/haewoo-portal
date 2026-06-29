@@ -8,7 +8,7 @@
 :root{--navy:#14233f;--navy2:#1f3358;--gold:#c2a36b;--bg:#f6f4ef;--ink:#1b2435;--muted:#6d7384;--line:#e7e2d8}
 *{box-sizing:border-box}body{margin:0;font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
 .hero{background:radial-gradient(circle at 30% 20%,var(--navy2),var(--navy) 70%);color:#fff;padding:40px 24px 52px;text-align:center}
-.hero .mark{color:var(--gold);font-size:30px}.hero h1{margin:8px 0 4px;font-size:24px}
+.hero .mark{color:var(--gold);font-size:30px}.hero h1{margin:12px 0 6px;font-size:clamp(40px,7vw,60px);line-height:1.1}
 .hero p{color:rgba(255,255,255,.75);margin:0}
 .hero a{display:inline-block;color:var(--navy);background:var(--gold);font-size:16px;font-weight:700;text-decoration:none;padding:11px 24px;border-radius:24px;box-shadow:0 8px 22px rgba(0,0,0,.28)}
 .hero a:hover{filter:brightness(1.07);transform:translateY(-1px)}
@@ -28,8 +28,7 @@
 <div class="hero">
   <div class="mark">❖</div>
   <h1>임직원 시스템 포털</h1>
-  <p>물류 · 통관 · 수책 · 근태를 한 곳에서</p>
-  <div style="margin-top:10px"><a href="index.html">← 회사 홈페이지로</a></div>
+  <div style="margin-top:16px"><a href="index.html">← 회사 홈페이지로</a></div>
 </div>
 <div class="wrap">
   <div class="grid">
