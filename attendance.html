@@ -77,7 +77,7 @@ tfoot th{background:#f0f3f8;color:var(--navy);font-size:13px;padding:10px 12px}
 
 <div id="app" style="display:none">
   <div class="hdr">
-    <div class="t">HAEWOO <b>VINA</b> · 근태</div>
+    <div class="t" style="cursor:pointer" title="뒤로 / 임직원 포털" onclick="if(history.length>1)history.back();else location.href='portal.html'">← HAEWOO <b>VINA</b> · 근태</div>
     <div class="sp"><span class="langs"><b class="langb on" data-l="ko">KO</b> · <b class="langb" data-l="vi">VI</b></span><span class="muted" id="whoami"></span><a class="home" href="portal.html">시스템</a><button class="lo" id="logout">로그아웃</button></div>
   </div>
   <div class="tabs">
